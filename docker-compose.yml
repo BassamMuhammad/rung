@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  frontend:
+    build: ./frontend
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    ports:
+      - 3000:3000
+      - 24678:24678
+    volumes:
+      - ./frontend:/frontend
+      - nodemodules:/frontend/node_modules
+
+  gateway:
+    ports:
+      - 4000:4000
+    build: ./backend/apiGateway
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./backend/apiGateway/src:/backend/apiGateway/src
+      - nodemodules:/backend/apiGateway/node_modules
+
+  auth:
+    ports:
+      - 4002:4002
+    build: ./backend/authService
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./backend/authService/src:/backend/authService/src
+      - nodemodules:/backend/authService/node_modules
+
+volumes:
+  nodemodules:
