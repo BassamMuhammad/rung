@@ -63,11 +63,11 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("move", username, index);
   });
   socket.on(
-    "trick",
+    "history",
     async (history: Record<string, string>[], roomId: string) => {
       try {
         await updateDoc(doc(getFirestore(), "rooms", roomId), {
-          history: history,
+          history,
         });
       } catch (error) {
         socket.emit("error", "Error occured. Try again");

@@ -139,34 +139,25 @@
 			gameplaySocket.emit('deck', deckComp.getDeck(), roomId);
 		}
 		const { x, y } = sideDivs[index].getBoundingClientRect();
-		const cards = deckComp.drawCards(numCards, x, y, { duration });
-		setTimeout(() => {
-			if (cards) {
-				sidesCardsProps[index] = sidesCardsProps[index].concat(cards[2]);
-				console.log({ index, cards: cards[0], _dealStatus });
-			}
-			if (changeDealStatus) dealStatus = _dealStatus;
-			if (_dealStatus === 'rung' && !rung) {
-				showRungChooser = true;
-				console.log('rung choosing', dealStatus);
-			}
-		}, duration);
+		const cards = await deckComp.drawCards(numCards, x, y, { duration });
+		if (cards) {
+			sidesCardsProps[index] = sidesCardsProps[index].concat(cards[2]);
+			console.log({ index, cards: cards[0], _dealStatus });
+		}
+		if (changeDealStatus) dealStatus = _dealStatus;
+		if (_dealStatus === 'rung' && !rung) {
+			showRungChooser = true;
+			console.log('rung choosing', dealStatus);
+		}
 	};
-	const dealToAll = (numCards: 5 | 4, dealStatus: DealStatus, dealRungChooser = true) => {
-		let timeOutOffset = 0;
+	const dealToAll = async (numCards: 5 | 4, dealStatus: DealStatus, dealRungChooser = true) => {
 		for (let i = sides[rungChoosingUserSide]; i < 4; i++) {
 			if (!dealRungChooser && i === sides[rungChoosingUserSide]) continue;
-			setTimeout(() => {
-				const changeDealStatus = sides[rungChoosingUserSide] === 0 && i === 3;
-				deal(i, numCards, dealStatus, changeDealStatus);
-			}, 1000 * timeOutOffset);
-			timeOutOffset++;
+			const changeDealStatus = sides[rungChoosingUserSide] === 0 && i === 3;
+			await deal(i, numCards, dealStatus, changeDealStatus);
 		}
 		for (let i = 0; i < sides[rungChoosingUserSide]; i++) {
-			setTimeout(() => {
-				deal(i, numCards, dealStatus, i === sides[rungChoosingUserSide] - 1);
-			}, 1000 * timeOutOffset);
-			timeOutOffset++;
+			await deal(i, numCards, dealStatus, i === sides[rungChoosingUserSide] - 1);
 		}
 	};
 	$: if (
@@ -273,7 +264,6 @@
 			history[history.length - 1][turnMakerName] = playedCard;
 			if (lastTrickLen + 1 === 4) {
 				totalTricksPlayed++;
-				gameplaySocket.emit('trick', history, roomId);
 				const nextTurnUser = determineRoundWinner();
 				const nextTurnSide = Object.entries(usersWithSides).find(
 					([side, user]) => user === nextTurnUser
@@ -285,7 +275,7 @@
 		}
 		return changedTurn;
 	};
-	const makeTurn = (index: number, turnMakerName: string, emitToOthers = true) => {
+	const makeTurn = async (index: number, turnMakerName: string, emitToOthers = true) => {
 		const turnMakerSide = Object.entries(usersWithSides).find(
 			([side, user]) => user === turnMakerName
 		)[0] as Side;
@@ -304,8 +294,8 @@
 			if (!changedTurn) nextTurn(turnMakerSide);
 		}
 		const { x, y } = centerDiv.getBoundingClientRect();
-		const duration = 2000;
-		const cardProps = renderedCardToPlay.transitionToTarget(x, y, { duration });
+		const duration = 1000;
+		const cardProps = await renderedCardToPlay.transitionToTarget(x, y, { duration });
 		let topPosition = '110px';
 		let leftPosition = '0px';
 
@@ -325,14 +315,12 @@
 			default:
 				break;
 		}
-		setTimeout(() => {
-			playedCardsProps = playedCardsProps.concat({
-				...cardProps,
-				topPosition,
-				leftPosition
-			});
-			if (totalTricksPlayed === 13) gameComplete = true;
-		}, duration);
+		playedCardsProps = playedCardsProps.concat({
+			...cardProps,
+			topPosition,
+			leftPosition
+		});
+		if (totalTricksPlayed === 13) gameComplete = true;
 	};
 
 	const nextTurn = (side: string) => {
@@ -355,6 +343,7 @@
 
 	$: if (gameComplete) {
 		didWeWon = myTeamTricks > opponentTeamTricks;
+		if (rungChoosingUserSide === 'bottom') gameplaySocket.emit('history', history, roomId);
 	}
 	const confirmQuit = (e: BeforeUnloadEvent) => {
 		e.preventDefault();
@@ -438,7 +427,11 @@
 				{/if}
 			</div>
 		</Modal>
-		<Modal transparentBackDrop show={gameComplete} style="height:100px;overflow:hidden">
+		<Modal
+			onBackDropClick={() => goto('/', { replaceState: true })}
+			show={gameComplete}
+			style="height:100px;overflow:hidden"
+		>
 			<div>
 				<h1>
 					You {didWeWon ? 'Won' : `Lose`}
