@@ -27,6 +27,10 @@
 	const playFriends = () => (askName = true);
 
 	const handleRoom = async (type: 'join' | 'create', isFriendly: boolean) => {
+		if (username.trim().length === 0) {
+			alert('Username should have atleast 1 letter');
+			return;
+		}
 		if (type === 'create' && roomId.trim()) {
 			alert(
 				'You have entered room id and want to to create a room. Remove room id to create a room'

@@ -90,6 +90,7 @@ app.post("/users", async (req, res) => {
     roomId,
     history: [],
   });
+  console.log("users");
   res.send("ok");
 });
 

@@ -24,14 +24,16 @@
 	import { io } from 'socket.io-client';
 	import { goto } from '$app/navigation';
 	import { onDestroy, onMount } from 'svelte';
+	import { browser } from '$app/env';
+	import { init } from 'svelte/internal';
 
 	export let roomId: string;
 	export let username: string;
 
 	let history: Record<string, string>[] = [{}];
 	let allowed = false;
-	let rungChoosingUserSide: Side = null;
-	let isRungChooser: boolean = null;
+	let rungChoosingUserSide: Side;
+	let isRungChooser: boolean;
 	let deckComp: Deck;
 	let centerDiv: HTMLDivElement;
 	let showRungChooser = false;
@@ -41,8 +43,8 @@
 	let loading = true;
 	let turn = '';
 	let deck: CardType[] = [];
-	let turnStarterSuit: Suit;
-	let initialDeal = false;
+	let trickSuit: Suit;
+	let dealStatus: DealStatus = 'aboutTo';
 	let totalTricksPlayed = 0;
 	let consecutiveTricksWon = 0;
 	let consecutiveTricksUser = '';
@@ -50,8 +52,10 @@
 	let opponentTeamTricks = 0;
 	let gameComplete = false;
 	let didWeWon = false;
+	let playedCards: CardType[] = [];
 
 	type Side = 'top' | 'bottom' | 'left' | 'right';
+	type DealStatus = 'aboutTo' | 'start' | 'rung' | 'first' | 'second' | 'done';
 
 	const usersWithSides: Record<Side, string> = { bottom: '', right: '', top: '', left: '' };
 	const sides: Record<Side, number> = { bottom: 0, right: 1, top: 2, left: 3 };
@@ -71,7 +75,7 @@
 			alert(msg);
 			goto('/', { replaceState: true });
 		});
-		gameplaySocket.on('rung', (rung: Suit) => chooseRung(rung, false));
+		gameplaySocket.on('rung', (rung: Suit) => chooseRung(rung));
 		gameplaySocket.on('move', (username: string, index: number) => {
 			makeTurn(index, username, false);
 		});
@@ -112,7 +116,6 @@
 		});
 		gameplaySocket.on('deck', (_deck) => {
 			deck = _deck;
-			console.log(deck, 'on');
 		});
 		gameplaySocket.on('turn', (_user) => {
 			const newTurn = Object.entries(usersWithSides).find(([side, user]) => user === _user)[0];
@@ -124,67 +127,81 @@
 		gameplaySocket.emit('check', username, roomId);
 	}
 
-	const deal = async (index: number, numCards: 5 | 4, rungDeal = false, duration = 1000) => {
-		await deckComp.gettingReady();
-		if (isRungChooser && rungDeal) {
-			deck = deckComp.getDeck();
-			console.log(deck, 'asd');
-			alert('check clg');
-			gameplaySocket.emit('deck', deck, roomId);
-			console.log(deck, 'em');
+	const deal = async (
+		index: number,
+		numCards: 5 | 4,
+		_dealStatus: DealStatus,
+		changeDealStatus: boolean,
+		duration = 1000
+	) => {
+		if (_dealStatus === 'rung') await deckComp.gettingReady(500 * 8);
+		if (isRungChooser && _dealStatus === 'rung') {
+			gameplaySocket.emit('deck', deckComp.getDeck(), roomId);
 		}
 		const { x, y } = sideDivs[index].getBoundingClientRect();
 		const cards = deckComp.drawCards(numCards, x, y, { duration });
 		setTimeout(() => {
 			if (cards) {
 				sidesCardsProps[index] = sidesCardsProps[index].concat(cards[2]);
+				console.log({ index, cards: cards[0], _dealStatus });
 			}
-			if (rungDeal && !rung) showRungChooser = true;
+			if (changeDealStatus) dealStatus = _dealStatus;
+			if (_dealStatus === 'rung' && !rung) {
+				showRungChooser = true;
+				console.log('rung choosing', dealStatus);
+			}
 		}, duration);
+	};
+	const dealToAll = (numCards: 5 | 4, dealStatus: DealStatus, dealRungChooser = true) => {
+		let timeOutOffset = 0;
+		for (let i = sides[rungChoosingUserSide]; i < 4; i++) {
+			if (!dealRungChooser && i === sides[rungChoosingUserSide]) continue;
+			setTimeout(() => {
+				const changeDealStatus = sides[rungChoosingUserSide] === 0 && i === 3;
+				deal(i, numCards, dealStatus, changeDealStatus);
+			}, 1000 * timeOutOffset);
+			timeOutOffset++;
+		}
+		for (let i = 0; i < sides[rungChoosingUserSide]; i++) {
+			setTimeout(() => {
+				deal(i, numCards, dealStatus, i === sides[rungChoosingUserSide] - 1);
+			}, 1000 * timeOutOffset);
+			timeOutOffset++;
+		}
 	};
 	$: if (
 		deckComp &&
 		allowed &&
 		rungChoosingUserSide &&
-		!initialDeal &&
+		dealStatus === 'aboutTo' &&
 		(isRungChooser || deck.length > 0)
 	) {
-		initialDeal = true;
-		deal(sides[rungChoosingUserSide], 5, true);
+		dealStatus = 'start';
+		deal(sides[rungChoosingUserSide], 5, 'rung', true);
+	}
+
+	$: if (rung && dealStatus === 'rung') {
+		console.log('others', dealStatus, rung);
+		dealToAll(5, 'first', false);
+	}
+	$: if (rung && dealStatus === 'first') dealToAll(4, 'second');
+	$: if (rung && dealStatus === 'second') {
+		dealToAll(4, 'done');
+		console.log('done', deck);
 	}
 
 	const chooseRung = (chosenRung: Suit, emitToOthers = true) => {
 		rung = chosenRung;
 		if (emitToOthers) gameplaySocket.emit('rung', rung, roomId);
 		showRungChooser = false;
-		const dealToAll = (numCards: 5 | 4, dealRungChooser = true) => {
-			for (let i = sides[rungChoosingUserSide]; i < 4; i++) {
-				if (!dealRungChooser && i === sides[rungChoosingUserSide]) continue;
-				setTimeout(() => {
-					deal(i, numCards, false);
-				}, 1000 * i);
-			}
-			for (let i = 0; i < sides[rungChoosingUserSide]; i++) {
-				setTimeout(() => {
-					deal(i, numCards, false);
-				}, 1000 * i);
-			}
-		};
-		dealToAll(5, false);
-		setTimeout(() => {
-			dealToAll(4);
-		}, 3100);
-		setTimeout(() => {
-			dealToAll(4);
-			console.log('done', deck);
-		}, 7100);
 	};
 
 	const isMoveValid = (playedCard: CardType, turnMakerRenderedCards: Card[]) => {
-		if (!turnStarterSuit) return true;
-		if (playedCard.includes(turnStarterSuit)) return true;
-		for (const turnMakerCard of turnMakerRenderedCards) {
-			if (turnMakerCard.getCard().includes(turnStarterSuit)) return false;
+		if (!trickSuit) return true;
+		if (playedCard.includes(trickSuit)) return true;
+		for (const turnMakerRenderedCard of turnMakerRenderedCards) {
+			const turnMakerCard = turnMakerRenderedCard.getCard();
+			if (turnMakerCard.includes(trickSuit) && !playedCards.includes(turnMakerCard)) return false;
 		}
 		return true;
 	};
@@ -232,10 +249,11 @@
 				(consecutiveTricksWon >= 2 && totalTricksPlayed > 3) ||
 				(consecutiveTricksWon >= 3 && totalTricksPlayed <= 3)
 			) {
-				if (seniorUser === username || seniorUser === usersWithSides['top']) myTeamTricks++;
-				else opponentTeamTricks++;
+				const tricksWon = totalTricksPlayed - myTeamTricks - opponentTeamTricks;
+				if (seniorUser === username || seniorUser === usersWithSides['top'])
+					myTeamTricks += tricksWon;
+				else opponentTeamTricks += tricksWon;
 				consecutiveTricksWon = 0;
-				seniorUser = '';
 			}
 		} else {
 			consecutiveTricksUser = seniorUser;
@@ -243,10 +261,10 @@
 		}
 		return seniorUser;
 	};
-
+	$: console.log(totalTricksPlayed);
 	const addToHistory = (turnMakerName: string, playedCard: CardType) => {
 		let changedTurn = false;
-		totalTricksPlayed++;
+		playedCards.push(playedCard);
 		const lastTrick = history[history.length - 1];
 		const lastTrickLen = Object.entries(lastTrick).length;
 		if (lastTrickLen === 4) {
@@ -254,38 +272,39 @@
 		} else {
 			history[history.length - 1][turnMakerName] = playedCard;
 			if (lastTrickLen + 1 === 4) {
-				alert('history');
+				totalTricksPlayed++;
 				gameplaySocket.emit('trick', history, roomId);
 				const nextTurnUser = determineRoundWinner();
 				const nextTurnSide = Object.entries(usersWithSides).find(
 					([side, user]) => user === nextTurnUser
 				)[0];
+				trickSuit = null;
 				turn = nextTurnSide;
 				changedTurn = true;
 			}
 		}
 		return changedTurn;
 	};
-
 	const makeTurn = (index: number, turnMakerName: string, emitToOthers = true) => {
 		const turnMakerSide = Object.entries(usersWithSides).find(
 			([side, user]) => user === turnMakerName
 		)[0] as Side;
 		const renderedCardToPlay = allRenderedCards[turnMakerSide][index];
 		const cardToPlay = renderedCardToPlay.getCard();
-		console.log({ cardToPlay, turnMakerSide, turnMakerName });
-		if (emitToOthers && !isMoveValid(cardToPlay, allRenderedCards[turnMakerSide])) {
-			alert('Invalid card. Match the suit');
-			return;
+		if (emitToOthers) {
+			if (!isMoveValid(cardToPlay, allRenderedCards[turnMakerSide])) {
+				alert('Invalid card. Match the suit');
+				return;
+			}
 		}
-		turnStarterSuit = cardToPlay.split('-')[2] as Suit;
+		if (!trickSuit) trickSuit = cardToPlay.split('-')[2] as Suit;
 		const changedTurn = addToHistory(turnMakerName, cardToPlay);
 		if (emitToOthers) {
 			gameplaySocket.emit('move', roomId, turnMakerName, index);
 			if (!changedTurn) nextTurn(turnMakerSide);
 		}
 		const { x, y } = centerDiv.getBoundingClientRect();
-		const duration = 1000;
+		const duration = 2000;
 		const cardProps = renderedCardToPlay.transitionToTarget(x, y, { duration });
 		let topPosition = '110px';
 		let leftPosition = '0px';
@@ -345,16 +364,25 @@
 	};
 	onMount(() => window.addEventListener('beforeunload', confirmQuit));
 
-	onDestroy(() => window.removeEventListener('beforeunload', confirmQuit));
+	onDestroy(() => {
+		if (browser) window.removeEventListener('beforeunload', confirmQuit);
+	});
 </script>
 
 <div class="container">
-	{#if loading}
-		<h1 class="center">Loading...</h1>
+	{#if loading || !rungChoosingUserSide}
+		<h1 class="center">{loading ? 'Loading' : 'Waiting for others'}...</h1>
 	{:else}
 		{#each Object.entries(sides) as [side, num]}
 			<h3 class={`${side}-name name`} style={`color: ${turn === side ? 'yellow' : 'white'}`}>
 				{usersWithSides[side]}{turn === side ? '*' : ''}
+				<h5 class="trick-score">
+					{side === 'bottom'
+						? `x${myTeamTricks}`
+						: side === 'right'
+						? `x${opponentTeamTricks}`
+						: ''}
+				</h5>
 			</h3>
 			<div bind:this={sideDivs[num]} class={side}>
 				{#each sidesCardsProps[num] as cardProps, index (`${side}-${index}`)}
@@ -376,16 +404,19 @@
 			</div>
 		{/each}
 		<div bind:this={centerDiv} class="center">
-			<h3>{rung}</h3>
-			<Deck
-				shouldShuffle={false}
-				{deck}
-				onClick={() => {}}
-				onDblClick={() => {}}
-				bind:this={deckComp}
-				cardWidth="75px"
-				cardHeight="100px"
-			/>
+			{#key deck}
+				<div style={`display:${dealStatus === 'done' ? 'none' : 'inline'}`}>
+					<Deck
+						shouldShuffle={false}
+						{deck}
+						onClick={() => {}}
+						onDblClick={() => {}}
+						bind:this={deckComp}
+						cardWidth="75px"
+						cardHeight="100px"
+					/>
+				</div>
+			{/key}
 			{#each playedCardsProps as cardProps, index}
 				<svelte:component this={Card} {...cardProps} showBackSide={false} shouldRotate={false} />
 			{/each}
@@ -466,25 +497,25 @@
 	.top-name {
 		position: absolute;
 		left: 90.5%;
-		top: -10px;
+		top: 0;
 		background-color: blue;
 	}
 	.left-name {
 		position: absolute;
-		top: -10px;
-		left: -0px;
+		top: 1.5%;
+		left: 0;
 		background-color: green;
 	}
 	.right-name {
 		position: absolute;
-		top: 88%;
+		top: 90.5%;
 		left: calc(100% - 125px);
 		background-color: green;
 	}
 	.bottom-name {
 		position: absolute;
-		left: 0px;
-		top: 88%;
+		left: 1.5%;
+		top: 92%;
 		background-color: blue;
 	}
 	.name {
@@ -493,5 +524,15 @@
 		z-index: 10;
 		height: 8%;
 		width: 8%;
+		margin: 0;
+	}
+	.trick-score {
+		position: absolute;
+		right: -5%;
+		bottom: 0;
+		z-index: 20;
+		margin: 0;
+		background-color: white;
+		color: black;
 	}
 </style>

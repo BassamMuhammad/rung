@@ -46,6 +46,7 @@ io.on("connection", (socket) => {
     roomId: string
   ) => {
     if (usernames.length === 4) {
+      console.log("req");
       await axios.post("http://localhost:4002/users", {
         usernames,
         roomId,
