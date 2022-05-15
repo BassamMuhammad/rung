@@ -4,14 +4,14 @@ import http from "http";
 import { Server } from "socket.io";
 import { initializeApp } from "firebase/app";
 import cors from "cors";
-import {
-  arrayUnion,
-  doc,
-  getDoc,
-  getFirestore,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
+import { doc, getFirestore, setDoc } from "firebase/firestore";
+import { onCheck } from "./socketEvents/onCheck";
+import { onRung } from "./socketEvents/onRung";
+import { onMove } from "./socketEvents/onMove";
+import { onHistory } from "./socketEvents/onHistory";
+import { onDeck } from "./socketEvents/onDeck";
+import { onTurn } from "./socketEvents/onTurn";
+import { onDeal } from "./socketEvents/onDeal";
 
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY,
@@ -31,76 +31,29 @@ const io = new Server(server, { cors: { origin: ["http://localhost:3000"] } });
 const PORT = (process.env.PORT && parseInt(process.env.PORT!)) || 4002;
 
 io.on("connection", (socket) => {
-  socket.on("check", async (username: string, roomId: string) => {
-    try {
-      const room = await getDoc(doc(getFirestore(), "rooms", roomId));
-      const usernames: string[] = room.get("usernames");
-      if (usernames.includes(username)) {
-        socket.join(roomId);
-        socket.emit("allowed", username);
-        if (io.sockets.adapter.rooms.get(roomId)!.size === 4) {
-          socket.emit("positions", usernames);
-          socket.to(roomId).emit("positions", usernames);
-        }
-      } else {
-        socket.emit("not-allowed", "No record exist of user");
-      }
-    } catch (error) {
-      socket.emit("error", "Error occured. Try again");
-    }
-  });
-  socket.on("rung", async (rung: string, roomId: string) => {
-    try {
-      await updateDoc(doc(getFirestore(), "rooms", roomId), { rung });
-      socket.to(roomId).emit("rung", rung);
-    } catch (error) {
-      socket.emit("error", "Error occured. Try again");
-    }
-  });
-  socket.on("move", (roomId: string, username: string, index: number) => {
-    socket.to(roomId).emit("move", username, index);
-  });
-  socket.on(
-    "history",
-    async (history: Record<string, string>[], roomId: string) => {
-      try {
-        await updateDoc(doc(getFirestore(), "rooms", roomId), {
-          history,
-        });
-      } catch (error) {
-        socket.emit("error", "Error occured. Try again");
-      }
-    }
-  );
-  socket.on("deck", (deck: [], roomId: string) => {
-    socket.to(roomId).emit("deck", deck);
-  });
-  socket.on("turn", (username: string, roomId: string) => {
-    socket.to(roomId).emit("turn", username);
-  });
-  socket.on("deal", async (username: string, roomId: string) => {
-    const room = await getDoc(doc(getFirestore(), "rooms", roomId));
-    const deal = room.get("deal");
-    deal.push(username);
-    await updateDoc(doc(getFirestore(), "rooms", roomId), {
-      deal,
-    });
-    if (deal.length === 4) {
-      socket.emit("start-game", true);
-      socket.to(roomId).emit("start-game", true);
-    }
-  });
+  socket.on("check", onCheck(io, socket));
+  socket.on("rung", onRung(socket));
+  socket.on("move", onMove(socket));
+  socket.on("history", onHistory(socket));
+  socket.on("deck", onDeck(socket));
+  socket.on("turn", onTurn(socket));
+  socket.on("deal", onDeal);
 });
 
 app.post("/users", async (req, res) => {
-  const { usernames, roomId } = req.body;
-  await setDoc(doc(getFirestore(), "rooms", roomId), {
-    usernames,
-    roomId,
-    history: [],
-    deal: [],
-  });
-  res.send("ok");
+  try {
+    const { usernames, roomId } = req.body;
+    await setDoc(doc(getFirestore(), "rooms", roomId), {
+      usernames,
+      roomId,
+      history: [],
+      deal: [],
+    });
+    res.send("ok");
+  } catch (error) {
+    res.status(404).send("Error");
+    console.log(error);
+  }
 });
 
 server.listen(PORT, () => {

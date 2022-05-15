@@ -26,7 +26,7 @@
 
 	$roomSocket.once(`in-room`, (username, roomId, isFriendly) => {
 		showFriendRoomLoading = false;
-		goto(`/room/${roomId}?username=${username}&friendly=${isFriendly}`);
+		goto(`/room/${roomId}?username=${username}&isFriendly=${isFriendly}`);
 	});
 
 	$roomSocket.on('error', (message) => {

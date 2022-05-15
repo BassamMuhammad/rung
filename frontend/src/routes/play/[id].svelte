@@ -430,13 +430,13 @@
 		>
 			<h1>You {didWeWon ? 'Won' : `Lose`}</h1>
 		</Modal>
-		<!-- <Modal
+		<Modal
 			transparentBackDrop
 			show={dealStatus === 'done' && !startGame}
 			style="height:100px;overflow:hidden"
 		>
 			<h1>Waiting for others...</h1>
-		</Modal> -->
+		</Modal>
 	{/if}
 </div>
 
