@@ -50,6 +50,7 @@
 	let consecutiveTricksUser = '';
 	let myTeamTricks = 0;
 	let opponentTeamTricks = 0;
+	let startGame = false;
 	let gameComplete = false;
 	let didWeWon = false;
 	let playedCards: CardType[] = [];
@@ -121,6 +122,7 @@
 			const newTurn = Object.entries(usersWithSides).find(([side, user]) => user === _user)[0];
 			turn = newTurn;
 		});
+		gameplaySocket.on('start-game', (_startGame) => (startGame = _startGame));
 	});
 
 	$: if (connected) {
@@ -138,16 +140,12 @@
 		if (isRungChooser && _dealStatus === 'rung') {
 			gameplaySocket.emit('deck', deckComp.getDeck(), roomId);
 		}
-		const { x, y } = sideDivs[index].getBoundingClientRect();
+		let { x, y } = sideDivs[index].getBoundingClientRect();
 		const cards = await deckComp.drawCards(numCards, x, y, { duration });
-		if (cards) {
-			sidesCardsProps[index] = sidesCardsProps[index].concat(cards[2]);
-			console.log({ index, cards: cards[0], _dealStatus });
-		}
+		sidesCardsProps[index] = sidesCardsProps[index].concat(cards[2]);
 		if (changeDealStatus) dealStatus = _dealStatus;
 		if (_dealStatus === 'rung' && !rung) {
 			showRungChooser = true;
-			console.log('rung choosing', dealStatus);
 		}
 	};
 	const dealToAll = async (numCards: 5 | 4, dealStatus: DealStatus, dealRungChooser = true) => {
@@ -172,14 +170,13 @@
 	}
 
 	$: if (rung && dealStatus === 'rung') {
-		console.log('others', dealStatus, rung);
 		dealToAll(5, 'first', false);
 	}
 	$: if (rung && dealStatus === 'first') dealToAll(4, 'second');
 	$: if (rung && dealStatus === 'second') {
 		dealToAll(4, 'done');
-		console.log('done', deck);
 	}
+	$: if (dealStatus === 'done') gameplaySocket.emit('deal', username, roomId);
 
 	const chooseRung = (chosenRung: Suit, emitToOthers = true) => {
 		rung = chosenRung;
@@ -252,7 +249,7 @@
 		}
 		return seniorUser;
 	};
-	$: console.log(totalTricksPlayed);
+
 	const addToHistory = (turnMakerName: string, playedCard: CardType) => {
 		let changedTurn = false;
 		playedCards.push(playedCard);
@@ -294,9 +291,9 @@
 			if (!changedTurn) nextTurn(turnMakerSide);
 		}
 		const { x, y } = centerDiv.getBoundingClientRect();
-		const duration = 1000;
-		const cardProps = await renderedCardToPlay.transitionToTarget(x, y, { duration });
-		let topPosition = '110px';
+		console.log({ x, y });
+		const cardProps = await renderedCardToPlay.transitionToTarget(x, y, { duration: 1000 });
+		let topPosition = '0px';
 		let leftPosition = '0px';
 
 		switch (turnMakerSide) {
@@ -306,11 +303,11 @@
 				break;
 			case 'left':
 				leftPosition = '-80px';
-				topPosition = '0px';
+				topPosition = '-55px';
 				break;
 			case 'right':
 				leftPosition = '80px';
-				topPosition = '0px';
+				topPosition = '-55px';
 				break;
 			default:
 				break;
@@ -339,7 +336,6 @@
 		}
 		gameplaySocket.emit('turn', usersWithSides[turn], roomId);
 	};
-	$: console.log(deck, 'p');
 
 	$: if (gameComplete) {
 		didWeWon = myTeamTricks > opponentTeamTricks;
@@ -385,9 +381,9 @@
 							}
 						}}
 						topPosition={side === 'top' || side === 'bottom' ? '0px' : `${index * 80}px`}
-						showBackSide={false}
-						shouldRotate={side === 'left' || side === 'right'}
 						leftPosition={side === 'left' || side === 'right' ? '10px' : `${index * 80}px`}
+						showBackSide={side !== 'bottom'}
+						shouldRotate={side === 'left' || side === 'right'}
 					/>
 				{/each}
 			</div>
@@ -406,7 +402,7 @@
 					/>
 				</div>
 			{/key}
-			{#each playedCardsProps as cardProps, index}
+			{#each playedCardsProps as cardProps}
 				<svelte:component this={Card} {...cardProps} showBackSide={false} shouldRotate={false} />
 			{/each}
 		</div>
@@ -432,12 +428,15 @@
 			show={gameComplete}
 			style="height:100px;overflow:hidden"
 		>
-			<div>
-				<h1>
-					You {didWeWon ? 'Won' : `Lose`}
-				</h1>
-			</div>
+			<h1>You {didWeWon ? 'Won' : `Lose`}</h1>
 		</Modal>
+		<!-- <Modal
+			transparentBackDrop
+			show={dealStatus === 'done' && !startGame}
+			style="height:100px;overflow:hidden"
+		>
+			<h1>Waiting for others...</h1>
+		</Modal> -->
 	{/if}
 </div>
 

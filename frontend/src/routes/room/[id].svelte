@@ -4,10 +4,12 @@
 	export const load: Load = async ({ params, url }) => {
 		const roomId = params['id'];
 		const username = url.searchParams.get('username');
+		const isFriendly = url.searchParams.get('isFriendly');
 		return {
 			props: {
 				roomId,
-				username
+				username,
+				isFriendly
 			}
 		};
 	};
@@ -20,22 +22,26 @@
 
 	export let roomId: string;
 	export let username: string;
+	export let isFriendly: boolean;
 
-	let users = [];
+	let users: string[] = [];
 	let messageToSend = '';
 	let messages: { username: string; text: string }[] = [];
 
 	if (browser) {
-		$roomSocket.emit('check-room', roomId, username);
-		$roomSocket.on('in-room', (status, usersInRoom) => {
+		$roomSocket.emit('check-room', roomId, username, isFriendly);
+		$roomSocket.on('check-room', (status, usersInRoom) => {
 			if (!status) goto('/', { replaceState: true });
 			else {
 				users = [...users, ...usersInRoom];
 				username = usersInRoom[usersInRoom.length - 1];
 			}
 		});
-		$roomSocket.on('entered-room', (newUser) => {
-			users = [...users, newUser];
+		$roomSocket.on('entered-room', (_users) => {
+			users = _users;
+		});
+		$roomSocket.on('user-left', (_user) => {
+			users = users.filter((user) => user !== _user);
 		});
 		$roomSocket.on('receive-message', (uName, message) => {
 			messages = [...messages, { username: uName, text: message }];
@@ -56,7 +62,7 @@
 <div class="container">
 	<side class="sidebar">
 		<h3>In Room - {users.length}/4</h3>
-		{#each users as user (user)}
+		{#each users as user}
 			<h2 class="user">{user}</h2>
 		{/each}
 	</side>

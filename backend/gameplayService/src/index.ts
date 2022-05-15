@@ -28,18 +28,16 @@ app.use(cors({ origin: "http://localhost:3000" }));
 app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: ["http://localhost:3000"] } });
-
 const PORT = (process.env.PORT && parseInt(process.env.PORT!)) || 4002;
 
 io.on("connection", (socket) => {
   socket.on("check", async (username: string, roomId: string) => {
     try {
-      const roomInfo = await getDoc(doc(getFirestore(), "rooms", roomId));
-      const usernames: string[] = roomInfo.get("usernames");
-      const index = usernames.findIndex((uName) => uName === username);
-      if (index >= 0) {
+      const room = await getDoc(doc(getFirestore(), "rooms", roomId));
+      const usernames: string[] = room.get("usernames");
+      if (usernames.includes(username)) {
         socket.join(roomId);
-        socket.emit("allowed", usernames[index]);
+        socket.emit("allowed", username);
         if (io.sockets.adapter.rooms.get(roomId)!.size === 4) {
           socket.emit("positions", usernames);
           socket.to(roomId).emit("positions", usernames);
@@ -80,17 +78,28 @@ io.on("connection", (socket) => {
   socket.on("turn", (username: string, roomId: string) => {
     socket.to(roomId).emit("turn", username);
   });
+  socket.on("deal", async (username: string, roomId: string) => {
+    const room = await getDoc(doc(getFirestore(), "rooms", roomId));
+    const deal = room.get("deal");
+    deal.push(username);
+    await updateDoc(doc(getFirestore(), "rooms", roomId), {
+      deal,
+    });
+    if (deal.length === 4) {
+      socket.emit("start-game", true);
+      socket.to(roomId).emit("start-game", true);
+    }
+  });
 });
 
 app.post("/users", async (req, res) => {
   const { usernames, roomId } = req.body;
-
   await setDoc(doc(getFirestore(), "rooms", roomId), {
     usernames,
     roomId,
     history: [],
+    deal: [],
   });
-  console.log("users");
   res.send("ok");
 });
 
