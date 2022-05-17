@@ -8,21 +8,20 @@
 	import { browser } from '$app/env';
 	import AuthFormModal from '$lib/AuthFormModal.svelte';
 	import { myFetch } from '$lib/helper';
+	import { authUserId, authUsername } from '$lib/stores/userCred';
+	import ProfileModal from '$lib/ProfileModal.svelte';
 
 	let showRules = false;
 	let showPlayModal = false;
 	let showLoginForm = false;
+	let showProfile = false;
 	let username = '';
 	let roomId = '';
 	let showFriendRoomLoading = false;
-	let authUsername = '';
-	let authUserId = '';
 	let showOnlineRoomLoading = false;
-	$: if (browser) {
-		authUsername = localStorage.getItem('authUsername');
-		authUserId = localStorage.getItem('authUserId');
-		if (authUsername) username = authUsername;
-	}
+	let profilePic = 'https://cdn4.iconfinder.com/data/icons/small-n-flat/24/user-alt-512.png';
+	let frontCustomCards: Record<string, string> = {};
+	let backCustomCard: string;
 
 	$roomSocket.once(`in-room`, (username, roomId, isFriendly) => {
 		showFriendRoomLoading = false;
@@ -34,12 +33,22 @@
 		showFriendRoomLoading = false;
 	});
 	const playOnline = async () => {
-		if (
-			authUsername &&
-			authUserId &&
-			(await myFetch('http://localhost:4003/check', 'POST', { authUsername, authUserId }))
-		) {
-			handleOnlineRoom();
+		if ($authUsername && $authUserId) {
+			try {
+				const res = await myFetch('http://localhost:4004/check', 'POST', {
+					$authUsername,
+					$authUserId
+				});
+				const jsonRes = await res.json();
+				if (jsonRes['data']) handleOnlineRoom();
+				else {
+					$authUserId = '';
+					$authUsername = '';
+					showLoginForm = true;
+				}
+			} catch (error) {
+				alert('Error occured. Please try again');
+			}
 		} else showLoginForm = true;
 	};
 	const getRules = () => (showRules = true);
@@ -65,17 +74,40 @@
 		$roomSocket.emit('online-room', username);
 		showOnlineRoomLoading = true;
 	};
+
+	const getUserData = async () => {
+		try {
+			const res = await myFetch('http://localhost:4004/get-user-data', 'POST', {
+				userId: $authUserId
+			});
+			const jsonRes = await res.json();
+			if (res.ok) {
+				const user = jsonRes['data']['user'];
+				if (user) {
+					if (user['profilePic']) profilePic = user['profilePic'];
+					frontCustomCards = user['frontCustomCards'];
+					backCustomCard = user['backCustomCard'];
+				}
+			}
+		} catch (error) {
+			alert('Error fetching data');
+			console.log(error);
+		}
+	};
+	$: if (browser && $authUserId && $authUsername) {
+		getUserData();
+	}
 </script>
 
 <div class="container">
 	<div class="user">
-		{#if authUsername && authUserId}
-			<h1>{authUsername}</h1>
+		{#if $authUsername && $authUserId}
+			<img on:click={() => (showProfile = true)} class="pic" src={profilePic} alt="profile pic" />
 		{/if}
 	</div>
 	<Title />
 	<ul>
-		{#if !authUsername || !authUserId}
+		{#if !$authUsername || !$authUserId}
 			<li><button on:click={() => (showLoginForm = true)}>Authenticate</button></li>
 		{/if}
 		<li><button on:click={playOnline}>Play Online</button></li>
@@ -113,6 +145,7 @@
 		</div>
 	</Modal>
 	<AuthFormModal bind:open={showLoginForm} />
+	<ProfileModal bind:open={showProfile} {profilePic} {frontCustomCards} {backCustomCard} />
 	<Modal show={showOnlineRoomLoading} style="width:20%;height:20%;overflow:hidden">
 		<h1>Loading...</h1>
 	</Modal>
@@ -160,6 +193,12 @@
 		padding: 0.25em;
 		margin-top: 0.5em;
 		margin-right: 0.5em;
+	}
+	.pic {
+		width: 50px;
+		height: 50px;
+		border-radius: 50%;
+		cursor: pointer;
 	}
 	@media (max-width: 600px) {
 		ul {

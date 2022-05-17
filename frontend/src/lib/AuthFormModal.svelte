@@ -2,6 +2,7 @@
 	import cookie from 'cookie';
 	import { myFetch } from './helper';
 	import Modal from './Modal.svelte';
+	import { authUserId, authUsername } from './stores/userCred';
 
 	export let open: boolean;
 
@@ -9,8 +10,7 @@
 	let email = '';
 	let password = '';
 	let profilePic: File;
-	let profilePicUrl: string =
-		'https://cdn4.iconfinder.com/data/icons/small-n-flat/24/user-alt-512.png';
+	let profilePicUrl = 'https://cdn4.iconfinder.com/data/icons/small-n-flat/24/user-alt-512.png';
 	let profilePicRef: HTMLInputElement;
 	let isSignup = true;
 	let loading = false;
@@ -45,8 +45,8 @@
 			const jsonRes = await res.json();
 			if (res.ok) {
 				const { userId, username } = jsonRes['data'];
-				localStorage.setItem('authUsername', username);
-				localStorage.setItem('authUserId', userId);
+				$authUserId = userId;
+				$authUsername = username;
 				open = false;
 			} else {
 				alert(jsonRes['error']['message'].replace('Firebase', ''));
@@ -119,6 +119,7 @@
 		width: 75px;
 		height: 75px;
 		border-radius: 50%;
+		cursor: pointer;
 	}
 	.input {
 		margin-top: 0.5em;
