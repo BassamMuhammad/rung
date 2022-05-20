@@ -23,8 +23,11 @@ export const onCheckRoom =
           usernames,
           roomId,
         });
+        const sockets = await io.in(roomId).fetchSockets();
+        sockets.forEach((sock) => sock.leave(roomId));
       }
       socket.emit("check-room", usernames.includes(username), usernames);
+      if (usernames.length === 4) socket.leave(roomId);
     } catch (error) {
       socket.emit("error", "Error occured. Try again");
     }

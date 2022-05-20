@@ -19,6 +19,7 @@
 	import { roomSocket } from '$lib/stores/roomSocket';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/env';
+	import { gameState } from '$lib/stores/gameState';
 
 	export let roomId: string;
 	export let username: string;
@@ -31,8 +32,11 @@
 	if (browser) {
 		$roomSocket.emit('check-room', roomId, username, isFriendly);
 		$roomSocket.on('check-room', (status, usersInRoom) => {
-			if (!status) goto('/', { replaceState: true });
-			else {
+			if (!status) {
+				$gameState = '';
+				goto('/', { replaceState: true });
+			} else {
+				$gameState = JSON.stringify({ roomId, isFriendly, username, place: 'room' });
 				users = [...users, ...usersInRoom];
 				username = usersInRoom[usersInRoom.length - 1];
 			}
@@ -56,12 +60,30 @@
 		messages = [...messages, { username, text: messageToSend }];
 		messageToSend = '';
 	};
-	$: if (users.length === 4) goto(`/play/${roomId}?username=${username}`, { replaceState: true });
+	const copyUrl = () => {
+		navigator.clipboard.writeText(`http://localhost:3000?roomId=${roomId}`);
+		copied = true;
+		setTimeout(() => {
+			copied = false;
+		}, 1000);
+	};
+	let copied = false;
+	$: if (users.length === 4) {
+		$gameState = '';
+		goto(`/play/${roomId}?username=${username}`, { replaceState: true });
+	}
 </script>
 
 <div class="container">
-	<side class="sidebar">
-		<h3>In Room - {users.length}/4</h3>
+	<side class="users-container">
+		<div class="users-heading">
+			<h3>In Room - {users.length}/4</h3>
+			{#if copied}
+				<i>&#10004;</i>
+			{:else}
+				<i on:click={copyUrl} style="cursor: pointer;">🔗</i>
+			{/if}
+		</div>
 		{#each users as user}
 			<h2 class="user">{user}</h2>
 		{/each}
@@ -93,10 +115,24 @@
 		width: 100vw;
 		height: 100vh;
 	}
-	.sidebar {
+	button {
+		padding: 1.5em;
+		border-radius: 5px;
+		font-weight: bold;
+		min-width: 11em;
+		cursor: pointer;
+		display: grid;
+		margin: auto;
+	}
+	.users-container {
 		width: 20%;
 		padding: 5px;
 		background-color: lightblue;
+	}
+	.users-heading {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
 	}
 	.user {
 		background-color: white;

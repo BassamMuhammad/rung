@@ -7,11 +7,14 @@ import cors from "cors";
 import { doc, getFirestore, setDoc } from "firebase/firestore";
 import { onCheck } from "./socketEvents/onCheck";
 import { onRung } from "./socketEvents/onRung";
-import { onMove } from "./socketEvents/onMove";
-import { onHistory } from "./socketEvents/onHistory";
+import { onMoveHistory } from "./socketEvents/onMoveHistory";
+import { onEnd } from "./socketEvents/onEnd";
 import { onDeck } from "./socketEvents/onDeck";
 import { onTurn } from "./socketEvents/onTurn";
 import { onDeal } from "./socketEvents/onDeal";
+import { onDisconnect } from "./socketEvents/onDisconnect";
+import { onForceStart } from "./socketEvents/onForceStart";
+import { onHistory } from "./socketEvents/onHistory";
 
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY,
@@ -32,12 +35,15 @@ const PORT = (process.env.PORT && parseInt(process.env.PORT!)) || 4002;
 
 io.on("connection", (socket) => {
   socket.on("check", onCheck(io, socket));
-  socket.on("rung", onRung(socket));
-  socket.on("move", onMove(socket));
-  socket.on("history", onHistory(socket));
-  socket.on("deck", onDeck(socket));
+  socket.on("rung", onRung(io, socket));
+  socket.on("move-history", onMoveHistory(io, socket));
+  socket.on("history", onEnd(io));
+  socket.on("deck", onDeck(io, socket));
   socket.on("turn", onTurn(socket));
-  socket.on("deal", onDeal);
+  socket.on("history", onHistory(io));
+  socket.on("deal", onDeal(io, socket));
+  socket.on("disconnect", onDisconnect(socket));
+  socket.on("force-start", onForceStart(io, socket));
 });
 
 app.post("/users", async (req, res) => {

@@ -25,12 +25,13 @@
 	import { goto } from '$app/navigation';
 	import { onDestroy, onMount } from 'svelte';
 	import { browser } from '$app/env';
-	import { init } from 'svelte/internal';
+	import { gameState } from '$lib/stores/gameState';
 
 	export let roomId: string;
 	export let username: string;
 
 	let history: Record<string, string>[] = [{}];
+	let sidesLeft: string[] = [];
 	let allowed = false;
 	let rungChoosingUserSide: Side;
 	let isRungChooser: boolean;
@@ -54,6 +55,14 @@
 	let gameComplete = false;
 	let didWeWon = false;
 	let playedCards: CardType[] = [];
+	let moveTimer = 0;
+	let moveTimerStopper: NodeJS.Timer;
+	let forceTimer = 0;
+	let forceTimerStopper: NodeJS.Timer;
+	let forceChange = false;
+	let fastTransition = false;
+	let movesUptoDate = false;
+	let synchronize = false;
 
 	type Side = 'top' | 'bottom' | 'left' | 'right';
 	type DealStatus = 'aboutTo' | 'start' | 'rung' | 'first' | 'second' | 'done';
@@ -68,19 +77,30 @@
 	gameplaySocket.on('connect', () => {
 		connected = true;
 		gameplaySocket.on('allowed', (uName) => {
+			$gameState = JSON.stringify({ roomId, username, place: 'play' });
 			allowed = true;
 			loading = false;
 			username = uName;
 		});
 		gameplaySocket.on('not-allowed', (msg) => {
 			alert(msg);
+			$gameState = '';
 			goto('/', { replaceState: true });
 		});
-		gameplaySocket.on('rung', (rung: Suit) => chooseRung(rung));
-		gameplaySocket.on('move', (username: string, index: number) => {
-			makeTurn(index, username, false);
+		gameplaySocket.on('rung', (rung: Suit) => {
+			chooseRung(rung, false);
+			alert(`Rung is ${rung}`);
 		});
-		gameplaySocket.on('positions', (_users: string[]) => {
+		gameplaySocket.on('move-history', async (_history: Record<string, string>[]) => {
+			history = _history;
+			if (!startGame || dealStatus !== 'done') return;
+			await playFromHistory(true);
+			synchronize = false;
+		});
+		gameplaySocket.on('reject-force', () => {
+			forceChange = true;
+		});
+		gameplaySocket.on('positions', (_users: string[], _usersLeft: string[]) => {
 			const myUserIndex = _users.findIndex((user) => user === username);
 			isRungChooser = myUserIndex === 0;
 			usersWithSides['bottom'] = username;
@@ -114,21 +134,114 @@
 					usersWithSides['left'] = _users[2];
 					break;
 			}
+			if (_usersLeft && _usersLeft.length > 0) {
+				_usersLeft.forEach((userLeft) => {
+					const sideLeft = Object.entries(usersWithSides).find(
+						([side, user]) => user === userLeft
+					)[0];
+					sidesLeft = [...sidesLeft, sideLeft];
+				});
+			}
 		});
 		gameplaySocket.on('deck', (_deck) => {
-			deck = _deck;
+			if (_deck) deck = _deck;
 		});
 		gameplaySocket.on('turn', (_user) => {
 			const newTurn = Object.entries(usersWithSides).find(([side, user]) => user === _user)[0];
 			turn = newTurn;
 		});
-		gameplaySocket.on('start-game', (_startGame) => (startGame = _startGame));
+		gameplaySocket.on('start-game', (_startGame: boolean, _history: Record<string, string>[]) => {
+			if (forceTimerStopper) clearInterval(forceTimerStopper);
+			startGame = _startGame;
+			if (
+				_history &&
+				(history.length < _history.length ||
+					Object.entries(history[history.length]).length <
+						Object.entries(_history[_history.length]).length)
+			) {
+				history = _history;
+			} else movesUptoDate = true;
+		});
+		gameplaySocket.on('user-left', (_user) => {
+			const userSide = Object.entries(usersWithSides).find(([side, user]) => user === _user)[0];
+			sidesLeft = [...sidesLeft, userSide];
+		});
+		gameplaySocket.on('reconnect', (_user) => {
+			const userSide = Object.entries(usersWithSides).find(([side, user]) => user === _user)[0];
+			sidesLeft = sidesLeft.filter((sideLeft) => sideLeft !== userSide);
+			usersWithSides[userSide] = _user;
+		});
 	});
+	const playFromHistory = async (addToHistory: boolean) => {
+		for (let i = totalTricksPlayed; i < history.length; i++) {
+			const move = history[i];
+			playedCards;
+			const moves = Object.entries(move);
+			for (let j = 0; j < moves.length; j++) {
+				const [username, card] = moves[j];
+				if (playedCards.includes(card as CardType)) continue;
+				const turnMakerWithSide = Object.entries(usersWithSides).find(
+					([side, uName]) => uName === username
+				);
+				const cardIndex = allRenderedCards[turnMakerWithSide[0] as Side].findIndex(
+					(renderedCard) => card === renderedCard.getCard()
+				);
+				await makeTurn(cardIndex, turnMakerWithSide[1], false, false, addToHistory);
+			}
+		}
+	};
 
 	$: if (connected) {
 		gameplaySocket.emit('check', username, roomId);
 	}
 
+	$: if (startGame && !moveTimerStopper && dealStatus === 'done' && !synchronize && movesUptoDate) {
+		if (moveTimer) clearInterval(moveTimer);
+		moveTimerStopper = setInterval(() => (moveTimer += 1), 1000);
+	}
+	forceTimerStopper = setInterval(() => (forceTimer += 1), 1000);
+
+	const makeMovesUptoDate = async () => {
+		synchronize = true;
+		fastTransition = true;
+		await playFromHistory(false);
+		fastTransition = false;
+		movesUptoDate = true;
+		setTimeout(() => {
+			synchronize = false;
+		}, 1000 * 30);
+	};
+
+	$: if (startGame && dealStatus === 'done' && !movesUptoDate) {
+		makeMovesUptoDate();
+	}
+
+	const forceStart = () => {
+		let event: string;
+		if (!usersWithSides['bottom']) event = 'positions';
+		else if (!rungChoosingUserSide && deck.length === 0) {
+			if (deckComp) {
+				deck = deckComp.getDeck();
+				event = 'deck';
+			}
+		} else if (!rung) {
+			chooseRung('SPADES', false);
+			alert('Rung is SPADES');
+			event = 'rung';
+		} else event = 'start';
+		gameplaySocket.emit(
+			'force-start',
+			roomId,
+			event,
+			forceChange,
+			deckComp && deckComp.getDeck(),
+			rung
+		);
+	};
+	$: if (forceTimer - 60 === 0) {
+		forceTimer = 0;
+		forceStart();
+	}
 	const deal = async (
 		index: number,
 		numCards: 5 | 4,
@@ -137,11 +250,13 @@
 		duration = 1000
 	) => {
 		if (_dealStatus === 'rung') await deckComp.gettingReady(500 * 8);
-		if (isRungChooser && _dealStatus === 'rung') {
+		if (isRungChooser && _dealStatus === 'rung' && !fastTransition) {
 			gameplaySocket.emit('deck', deckComp.getDeck(), roomId);
 		}
 		let { x, y } = sideDivs[index].getBoundingClientRect();
-		const cards = await deckComp.drawCards(numCards, x, y, { duration });
+		const cards = await deckComp.drawCards(numCards, x, y, {
+			duration: fastTransition ? 5 : duration
+		});
 		sidesCardsProps[index] = sidesCardsProps[index].concat(cards[2]);
 		if (changeDealStatus) dealStatus = _dealStatus;
 		if (_dealStatus === 'rung' && !rung) {
@@ -176,7 +291,9 @@
 	$: if (rung && dealStatus === 'second') {
 		dealToAll(4, 'done');
 	}
-	$: if (dealStatus === 'done') gameplaySocket.emit('deal', username, roomId);
+	$: if (dealStatus === 'done') {
+		gameplaySocket.emit('deal', username, roomId);
+	}
 
 	const chooseRung = (chosenRung: Suit, emitToOthers = true) => {
 		rung = chosenRung;
@@ -234,8 +351,9 @@
 		if (consecutiveTricksUser === seniorUser) {
 			consecutiveTricksWon++;
 			if (
-				(consecutiveTricksWon >= 2 && totalTricksPlayed > 3) ||
-				(consecutiveTricksWon >= 3 && totalTricksPlayed <= 3)
+				(consecutiveTricksWon === 2 && totalTricksPlayed > 3) ||
+				(consecutiveTricksWon === 3 && totalTricksPlayed <= 3) ||
+				totalTricksPlayed === 13
 			) {
 				const tricksWon = totalTricksPlayed - myTeamTricks - opponentTeamTricks;
 				if (seniorUser === username || seniorUser === usersWithSides['top'])
@@ -249,7 +367,6 @@
 		}
 		return seniorUser;
 	};
-
 	const addToHistory = (turnMakerName: string, playedCard: CardType) => {
 		let changedTurn = false;
 		playedCards.push(playedCard);
@@ -259,6 +376,7 @@
 			history = [...history, { [turnMakerName]: playedCard }];
 		} else {
 			history[history.length - 1][turnMakerName] = playedCard;
+			//prev trick len + 1 added now === 4
 			if (lastTrickLen + 1 === 4) {
 				totalTricksPlayed++;
 				const nextTurnUser = determineRoundWinner();
@@ -270,29 +388,52 @@
 				changedTurn = true;
 			}
 		}
+		gameplaySocket.emit('history', history, roomId);
 		return changedTurn;
 	};
-	const makeTurn = async (index: number, turnMakerName: string, emitToOthers = true) => {
+
+	const makeBotTurn = async () => {
+		const turnMakerName = Object.entries(usersWithSides).find(([side, user]) => side === turn)[1];
+		for (let i = 0; i < allRenderedCards[turn].length; i++) {
+			if (playedCards.includes(allRenderedCards[turn][i].getCard())) continue;
+			const success = await makeTurn(i, turnMakerName, false, true);
+			if (success) break;
+		}
+	};
+	$: if ((turn && sidesLeft.includes(turn)) || (moveTimer % 10 === 0 && moveTimer !== 0)) {
+		moveTimer = 0;
+		makeBotTurn();
+	}
+	const makeTurn = async (
+		index: number,
+		turnMakerName: string,
+		emitToOthers = true,
+		botMove = false,
+		changeHistory = true
+	) => {
 		const turnMakerSide = Object.entries(usersWithSides).find(
 			([side, user]) => user === turnMakerName
 		)[0] as Side;
 		const renderedCardToPlay = allRenderedCards[turnMakerSide][index];
 		const cardToPlay = renderedCardToPlay.getCard();
-		if (emitToOthers) {
+		if (!trickSuit) trickSuit = cardToPlay.split('-')[2] as Suit;
+		if (emitToOthers || botMove) {
 			if (!isMoveValid(cardToPlay, allRenderedCards[turnMakerSide])) {
-				alert('Invalid card. Match the suit');
-				return;
+				if (!botMove) alert('Invalid card. Match the suit');
+				return false;
 			}
 		}
-		if (!trickSuit) trickSuit = cardToPlay.split('-')[2] as Suit;
-		const changedTurn = addToHistory(turnMakerName, cardToPlay);
+		if (changeHistory) {
+			const changedTurn = addToHistory(turnMakerName, cardToPlay);
+			if (!changedTurn) nextTurn(turnMakerSide, emitToOthers);
+		}
 		if (emitToOthers) {
-			gameplaySocket.emit('move', roomId, turnMakerName, index);
-			if (!changedTurn) nextTurn(turnMakerSide);
+			gameplaySocket.emit('move-history', roomId, history);
 		}
 		const { x, y } = centerDiv.getBoundingClientRect();
-		console.log({ x, y });
-		const cardProps = await renderedCardToPlay.transitionToTarget(x, y, { duration: 1000 });
+		const cardProps = await renderedCardToPlay.transitionToTarget(x, y, {
+			duration: fastTransition ? 5 : 1000
+		});
 		let topPosition = '0px';
 		let leftPosition = '0px';
 
@@ -317,10 +458,14 @@
 			topPosition,
 			leftPosition
 		});
-		if (totalTricksPlayed === 13) gameComplete = true;
+		if (totalTricksPlayed === 13) {
+			gameComplete = true;
+			clearInterval(moveTimerStopper);
+		}
+		return true;
 	};
 
-	const nextTurn = (side: string) => {
+	const nextTurn = (side: string, emitToOthers = true) => {
 		switch (side as Side) {
 			case 'bottom':
 				turn = 'right';
@@ -334,12 +479,19 @@
 			default:
 				turn = 'bottom';
 		}
-		gameplaySocket.emit('turn', usersWithSides[turn], roomId);
+		if (emitToOthers) gameplaySocket.emit('turn', usersWithSides[turn], roomId);
 	};
 
 	$: if (gameComplete) {
 		didWeWon = myTeamTricks > opponentTeamTricks;
-		if (rungChoosingUserSide === 'bottom') gameplaySocket.emit('history', history, roomId);
+		$gameState = '';
+		let winners: [string, string];
+		if (didWeWon) {
+			winners = [usersWithSides['bottom'], usersWithSides['top']];
+		} else {
+			winners = [usersWithSides['left'], usersWithSides['right']];
+		}
+		gameplaySocket.emit('onEnd', rung, winners, history, roomId);
 	}
 	const confirmQuit = (e: BeforeUnloadEvent) => {
 		e.preventDefault();
@@ -360,7 +512,7 @@
 	{:else}
 		{#each Object.entries(sides) as [side, num]}
 			<h3 class={`${side}-name name`} style={`color: ${turn === side ? 'yellow' : 'white'}`}>
-				{usersWithSides[side]}{turn === side ? '*' : ''}
+				{sidesLeft.includes(side) ? `Bot ${side}` : usersWithSides[side]}{turn === side ? '*' : ''}
 				<h5 class="trick-score">
 					{side === 'bottom'
 						? `x${myTeamTricks}`
@@ -375,9 +527,9 @@
 						this={Card}
 						bind:this={allRenderedCards[side][index]}
 						{...cardProps}
-						onDblClick={() => {
-							if (turn === 'bottom') {
-								makeTurn(index, username);
+						onDblClick={async () => {
+							if (turn === 'bottom' && startGame && movesUptoDate) {
+								await makeTurn(index, username);
 							}
 						}}
 						topPosition={side === 'top' || side === 'bottom' ? '0px' : `${index * 80}px`}
@@ -426,9 +578,10 @@
 		<Modal
 			onBackDropClick={() => goto('/', { replaceState: true })}
 			show={gameComplete}
-			style="height:100px;overflow:hidden"
+			style="height:150px;overflow:hidden"
 		>
 			<h1>You {didWeWon ? 'Won' : `Lose`}</h1>
+			<button on:click={() => goto('/', { replaceState: true })}>Return</button>
 		</Modal>
 		<Modal
 			transparentBackDrop
@@ -436,6 +589,9 @@
 			style="height:100px;overflow:hidden"
 		>
 			<h1>Waiting for others...</h1>
+		</Modal>
+		<Modal transparentBackDrop show={synchronize} style="height:100px;overflow:hidden">
+			<h1>Synchronizing with others</h1>
 		</Modal>
 	{/if}
 </div>

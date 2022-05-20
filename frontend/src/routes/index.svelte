@@ -1,3 +1,16 @@
+<script lang="ts" context="module">
+	import type { Load } from '@sveltejs/kit';
+
+	export const load: Load = async ({ url }) => {
+		const roomId = url.searchParams.get('roomId') ?? '';
+		return {
+			props: {
+				roomId
+			}
+		};
+	};
+</script>
+
 <script lang="ts">
 	import Title from '$lib/Title.svelte';
 	import Modal from '$lib/Modal.svelte';
@@ -10,21 +23,31 @@
 	import { myFetch } from '$lib/helper';
 	import { authUserId, authUsername } from '$lib/stores/userCred';
 	import ProfileModal from '$lib/ProfileModal.svelte';
+	import { gameState } from '$lib/stores/gameState';
+
+	export let roomId = '';
+	if ($gameState) {
+		const { place, roomId, isFriendly, username } = JSON.parse($gameState);
+		goto(`/${place}/${roomId}?username=${username}&isFriendly=${isFriendly}`);
+	}
 
 	let showRules = false;
-	let showPlayModal = false;
+	let showPlayFriendsModal = !!roomId;
 	let showLoginForm = false;
 	let showProfile = false;
 	let username = '';
-	let roomId = '';
 	let showFriendRoomLoading = false;
 	let showOnlineRoomLoading = false;
 	let profilePic = 'https://cdn4.iconfinder.com/data/icons/small-n-flat/24/user-alt-512.png';
 	let frontCustomCards: Record<string, string> = {};
 	let backCustomCard: string;
 
+	$: username = $authUsername;
+
 	$roomSocket.once(`in-room`, (username, roomId, isFriendly) => {
 		showFriendRoomLoading = false;
+		showPlayFriendsModal = false;
+		showOnlineRoomLoading = false;
 		goto(`/room/${roomId}?username=${username}&isFriendly=${isFriendly}`);
 	});
 
@@ -53,7 +76,7 @@
 	};
 	const getRules = () => (showRules = true);
 
-	const playFriends = () => (showPlayModal = true);
+	const playFriends = () => (showPlayFriendsModal = true);
 
 	const handleFriendlyRoom = async (type: 'join' | 'create') => {
 		if (username.trim().length === 0) {
@@ -120,8 +143,8 @@
 	</Modal>
 
 	<Modal
-		show={showPlayModal}
-		onBackDropClick={() => (showPlayModal = false)}
+		show={showPlayFriendsModal}
+		onBackDropClick={() => (showPlayFriendsModal = false)}
 		style="width:30%;height:20%;overflow:hidden"
 	>
 		<div class="play">

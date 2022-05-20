@@ -11,12 +11,53 @@ export const onCheck =
     try {
       const room = await getDoc(doc(getFirestore(), "rooms", roomId));
       const usernames: string[] = room.get("usernames");
+
+      if (room.get("completed")) {
+        socket.emit("not-allowed", "Game completed");
+        return;
+      }
+
       if (usernames.includes(username)) {
         socket.join(roomId);
+        const sockets = await io.in(roomId).fetchSockets();
+        const startIndex = sockets.findIndex((socket) => socket.data["start"]);
+        const rungIndex = sockets.findIndex((socket) => socket.data["rung"]);
+        const deckIndex = sockets.findIndex((socket) => socket.data["deck"]);
+        const positionsIndex = sockets.findIndex(
+          (socket) => socket.data["positions"]
+        );
+        console.log({ positionsIndex, deckIndex, rungIndex, startIndex });
         socket.emit("allowed", username);
-        if (io.sockets.adapter.rooms.get(roomId)!.size === 4) {
-          socket.emit("positions", usernames);
-          socket.to(roomId).emit("positions", usernames);
+        socket.data["username"] = username;
+        socket.data["roomId"] = roomId;
+        if (positionsIndex >= 0) {
+          const usersInRoom: string[] = sockets.map(
+            (socket) => socket.data["username"]
+          );
+          const usersLeft: string[] = usernames.filter(
+            (uName) => !usersInRoom.includes(uName)
+          );
+          socket.emit("positions", usernames, usersLeft);
+          if (deckIndex >= 0) {
+            const deckSocket = sockets[deckIndex];
+            socket.emit("deck", deckSocket.data["deck"]);
+          }
+          if (rungIndex >= 0) {
+            const rungSocket = sockets[rungIndex];
+            socket.emit("rung", rungSocket.data["rung"]);
+          }
+          if (startIndex >= 0) {
+            const startSocket = sockets[startIndex];
+            socket.emit("start-game", true, startSocket.data["history"]);
+            console.log("start");
+          }
+          socket.to(roomId).emit("reconnect", username);
+        } else {
+          if (io.sockets.adapter.rooms.get(roomId)!.size === 4) {
+            sockets.forEach((sock) => (sock.data["positions"] = usernames));
+            socket.emit("positions", usernames);
+            socket.to(roomId).emit("positions", usernames);
+          }
         }
       } else {
         socket.emit("not-allowed", "No record exist of user");
