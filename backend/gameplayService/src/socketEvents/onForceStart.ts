@@ -27,6 +27,7 @@ export const onForceStart =
         socket.emit("reject-start");
         return;
       }
+      console.log(usernames);
       const usersInRoom: string[] = sockets.map(
         (socket) => socket.data["username"]
       );

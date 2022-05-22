@@ -84,10 +84,12 @@
 	<side class="users-container">
 		<div class="users-heading">
 			<h3>In Room - {users.length}/4</h3>
-			{#if copied}
-				<i>&#10004;</i>
-			{:else}
-				<i on:click={copyUrl} style="cursor: pointer;">🔗</i>
+			{#if !isFriendly}
+				{#if copied}
+					<i>&#10004;</i>
+				{:else}
+					<i on:click={copyUrl} style="cursor: pointer;">🔗</i>
+				{/if}
 			{/if}
 		</div>
 		{#each users as user}

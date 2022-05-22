@@ -49,6 +49,7 @@ io.on("connection", (socket) => {
 app.post("/users", async (req, res) => {
   try {
     const { usernames, roomId } = req.body;
+    console.log({ usernames, roomId });
     await setDoc(doc(getFirestore(), "rooms", roomId), {
       usernames,
       roomId,

@@ -26,10 +26,14 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { browser } from '$app/env';
 	import { gameState } from '$lib/stores/gameState';
+	import { authUserId } from '$lib/stores/userCred';
+	import CustomCard from '$lib/CustomCard.svelte';
 
 	export let roomId: string;
 	export let username: string;
 
+	let frontCustomCards: Record<string, string> = {};
+	let backCustomCard: string;
 	let history: Record<string, string>[] = [{}];
 	let sidesLeft: string[] = [];
 	let allowed = false;
@@ -316,6 +320,24 @@
 		return true;
 	};
 
+	const getUserData = async () => {
+		if (!$authUserId) return;
+		try {
+			const res = await fetch(`http://localhost:4004/get-user-data?userId=${$authUserId}`);
+			const jsonRes = await res.json();
+			if (res.ok) {
+				const user = jsonRes['data']['user'];
+				if (user) {
+					frontCustomCards = user['frontCustomCards'];
+					backCustomCard = user['backCustomCard'];
+				}
+			}
+		} catch (error) {
+			alert('Error fetching data');
+			console.log(error);
+		}
+	};
+	getUserData();
 	const cardStrToNumVal = (cardStrVal: ValueWithoutJoker) => {
 		switch (cardStrVal) {
 			case 'ACE':
@@ -405,7 +427,7 @@
 			if (success) break;
 		}
 	};
-	$: if ((turn && sidesLeft.includes(turn)) || (moveTimer % 10 === 0 && moveTimer !== 0)) {
+	$: if ((turn && sidesLeft.includes(turn)) || moveTimer - 60 === 0) {
 		moveTimer = 0;
 		makeBotTurn();
 	}
@@ -543,6 +565,14 @@
 								await makeTurn(index, username);
 							}
 						}}
+						customFront={frontCustomCards[cardProps['card']] ? CustomCard : null}
+						customFrontProps={frontCustomCards[cardProps['card']]
+							? { src: frontCustomCards[cardProps['card']], alt: cardProps['card'] }
+							: {}}
+						customBack={backCustomCard ? CustomCard : null}
+						customBackProps={backCustomCard
+							? { src: backCustomCard, alt: 'backside of a card' }
+							: {}}
 						topPosition={side === 'top' || side === 'bottom' ? '0px' : `${index * 13}vmin`}
 						leftPosition={side === 'left' || side === 'right' ? '30px' : `${index * 13}vmin`}
 						showBackSide={side !== 'bottom'}
@@ -568,7 +598,18 @@
 				</div>
 			{/key}
 			{#each playedCardsProps as cardProps}
-				<svelte:component this={Card} {...cardProps} showBackSide={false} shouldRotate={false} />
+				<svelte:component
+					this={Card}
+					{...cardProps}
+					showBackSide={false}
+					shouldRotate={false}
+					customFront={frontCustomCards[cardProps['card']] ? CustomCard : null}
+					customFrontProps={frontCustomCards[cardProps['card']]
+						? { src: frontCustomCards[cardProps['card']], alt: cardProps['card'] }
+						: {}}
+					customBack={backCustomCard ? CustomCard : null}
+					customBackProps={backCustomCard ? { src: backCustomCard, alt: 'backside of a card' } : {}}
+				/>
 			{/each}
 		</div>
 		<Modal

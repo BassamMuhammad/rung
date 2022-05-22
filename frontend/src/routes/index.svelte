@@ -70,12 +70,13 @@
 		if ($authUsername && $authUserId) {
 			try {
 				const res = await myFetch('http://localhost:4004/check', 'POST', {
-					$authUsername,
-					$authUserId
+					username: $authUsername,
+					userId: $authUserId
 				});
 				const jsonRes = await res.json();
 				if (jsonRes['data']) handleOnlineRoom();
 				else {
+					console.log(jsonRes);
 					$authUserId = '';
 					$authUsername = '';
 					showLoginForm = true;
@@ -111,9 +112,7 @@
 
 	const getUserData = async () => {
 		try {
-			const res = await myFetch('http://localhost:4004/get-user-data', 'POST', {
-				userId: $authUserId
-			});
+			const res = await fetch(`http://localhost:4004/get-user-data?userId=${$authUserId}`);
 			const jsonRes = await res.json();
 			if (res.ok) {
 				const user = jsonRes['data']['user'];

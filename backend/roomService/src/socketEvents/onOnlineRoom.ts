@@ -46,6 +46,6 @@ export const onOnlineRoom =
         roomId,
       });
     }
-    socket.data = { username };
+    socket.data["username"] = username;
     onRoomEntered(socket, usernames!, username, roomId!, false);
   };

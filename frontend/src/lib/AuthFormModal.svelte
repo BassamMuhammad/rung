@@ -45,6 +45,7 @@
 			const jsonRes = await res.json();
 			if (res.ok) {
 				const { userId, username } = jsonRes['data'];
+				console.log(userId, username);
 				$authUserId = userId;
 				$authUsername = username;
 				open = false;

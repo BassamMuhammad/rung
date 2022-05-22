@@ -29,7 +29,7 @@ app.use(express.json());
 const PORT = (process.env.PORT && parseInt(process.env.PORT!)) || 4004;
 
 app.post("/add-user-data", addUserData);
-app.post("/get-user-data", getUserData);
+app.get("/get-user-data", getUserData);
 app.post("/customize-cards", upload.array("customCards"), customizeCards);
 app.post("/check", check);
 app.post("/edit-pic", upload.single("profilePic"), editPic);

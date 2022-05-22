@@ -9,7 +9,6 @@ import axios from "axios";
 export const signup = async (req: Request, res: Response) => {
   const { profilePic, username, email, password } = req.body;
   try {
-    console.log("before");
     const checkRes = await axios.post("http://localhost:4004/check", {
       username,
       checkWithUsername: true,
