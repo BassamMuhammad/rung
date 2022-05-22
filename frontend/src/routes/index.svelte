@@ -26,9 +26,20 @@
 	import { gameState } from '$lib/stores/gameState';
 
 	export let roomId = '';
+
+	const checkGameState = async () => {
+		const { place, roomId, isFriendly, username, madeAt } = JSON.parse($gameState);
+		if (new Date().getTime() - madeAt >= 1000 * 60 * 30) {
+			$gameState = '';
+		} else if (place === 'play') {
+			const res = await fetch(`http://localhost:4004/check-room?${roomId}`);
+			if (res.ok) goto(`/${place}/${roomId}?username=${username}&isFriendly=${isFriendly}`);
+			else $gameState = '';
+		} else goto(`/${place}/${roomId}?username=${username}&isFriendly=${isFriendly}`);
+	};
+
 	if ($gameState) {
-		const { place, roomId, isFriendly, username } = JSON.parse($gameState);
-		goto(`/${place}/${roomId}?username=${username}&isFriendly=${isFriendly}`);
+		checkGameState();
 	}
 
 	let showRules = false;

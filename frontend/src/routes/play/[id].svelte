@@ -77,7 +77,12 @@
 	gameplaySocket.on('connect', () => {
 		connected = true;
 		gameplaySocket.on('allowed', (uName) => {
-			$gameState = JSON.stringify({ roomId, username, place: 'play' });
+			$gameState = JSON.stringify({
+				roomId,
+				username,
+				place: 'play',
+				madeAt: new Date().getTime()
+			});
 			allowed = true;
 			loading = false;
 			username = uName;
@@ -504,6 +509,11 @@
 	onDestroy(() => {
 		if (browser) window.removeEventListener('beforeunload', confirmQuit);
 	});
+
+	const returnToHomePage = () => {
+		$gameState = '';
+		goto('/', { replaceState: true });
+	};
 </script>
 
 <div class="container">
@@ -525,6 +535,7 @@
 				{#each sidesCardsProps[num] as cardProps, index (`${side}-${index}`)}
 					<svelte:component
 						this={Card}
+						style="z-index: 50;"
 						bind:this={allRenderedCards[side][index]}
 						{...cardProps}
 						onDblClick={async () => {
@@ -532,10 +543,12 @@
 								await makeTurn(index, username);
 							}
 						}}
-						topPosition={side === 'top' || side === 'bottom' ? '0px' : `${index * 80}px`}
-						leftPosition={side === 'left' || side === 'right' ? '10px' : `${index * 80}px`}
+						topPosition={side === 'top' || side === 'bottom' ? '0px' : `${index * 13}vmin`}
+						leftPosition={side === 'left' || side === 'right' ? '30px' : `${index * 13}vmin`}
 						showBackSide={side !== 'bottom'}
 						shouldRotate={side === 'left' || side === 'right'}
+						width="13vmin"
+						height="13vmin"
 					/>
 				{/each}
 			</div>
@@ -549,7 +562,7 @@
 						onClick={() => {}}
 						onDblClick={() => {}}
 						bind:this={deckComp}
-						cardWidth="75px"
+						cardWidth="100px"
 						cardHeight="100px"
 					/>
 				</div>
@@ -558,7 +571,11 @@
 				<svelte:component this={Card} {...cardProps} showBackSide={false} shouldRotate={false} />
 			{/each}
 		</div>
-		<Modal transparentBackDrop show={showRungChooser} style="height:150px;overflow:hidden">
+		<Modal
+			transparentBackDrop
+			show={showRungChooser}
+			style="height:200px;width:500px;overflow-x:hidden;overflow-y:scroll;padding:5px"
+		>
 			<div>
 				<h1>
 					{isRungChooser
@@ -566,7 +583,7 @@
 						: `${usersWithSides[rungChoosingUserSide]} is choosing Rung`}
 				</h1>
 				{#if isRungChooser}
-					<div style="display: flex;justify-content:space-evenly">
+					<div class="choose-rung">
 						<button on:click={() => chooseRung('SPADES')}>SPADES</button>
 						<button on:click={() => chooseRung('DIAMONDS')}>DIAMONDS</button>
 						<button on:click={() => chooseRung('HEARTS')}>HEARTS</button>
@@ -576,12 +593,12 @@
 			</div>
 		</Modal>
 		<Modal
-			onBackDropClick={() => goto('/', { replaceState: true })}
+			onBackDropClick={returnToHomePage}
 			show={gameComplete}
-			style="height:150px;overflow:hidden"
+			style="height:200px;padding:5px;overflow:hidden"
 		>
 			<h1>You {didWeWon ? 'Won' : `Lose`}</h1>
-			<button on:click={() => goto('/', { replaceState: true })}>Return</button>
+			<button style="width:100%" on:click={returnToHomePage}>Return</button>
 		</Modal>
 		<Modal
 			transparentBackDrop
@@ -601,6 +618,10 @@
 		width: 100vw;
 		height: 100vh;
 	}
+	.choose-rung {
+		display: flex;
+		justify-content: space-evenly;
+	}
 	.center {
 		position: absolute;
 		top: 50%;
@@ -609,78 +630,95 @@
 	}
 	.left {
 		position: absolute;
-		top: 10%;
-		height: 80%;
-		width: 125px;
+		top: 10vh;
+		height: 80vh;
+		width: 9.5vw;
 		background-color: green;
 		overflow-y: scroll;
 	}
 	.right {
 		position: absolute;
-		top: 10%;
-		left: calc(100% - 125px);
-		height: 80%;
-		width: 125px;
+		top: 10vh;
+		right: 0;
+		height: 80vh;
+		width: 9.5vw;
 		background-color: green;
 		overflow-y: scroll;
 	}
 	.top {
 		position: absolute;
-		left: 10%;
-		width: 80%;
-		height: 125px;
+		left: 10vw;
+		top: 0;
+		width: 80vw;
+		height: 20vmin;
 		background-color: blue;
 		overflow-x: scroll;
 	}
 
 	.bottom {
 		position: absolute;
-		left: 10%;
-		top: calc(100% - 125px);
-		width: 80%;
-		height: 125px;
+		left: 10vw;
+		bottom: 0;
+		width: 80vw;
+		height: 20vmin;
 		background-color: blue;
 		overflow-x: scroll;
 	}
 	.top-name {
 		position: absolute;
-		left: 90.5%;
 		top: 0;
+		right: 1.5vw;
 		background-color: blue;
 	}
 	.left-name {
 		position: absolute;
-		top: 1.5%;
+		top: 1.5vh;
 		left: 0;
 		background-color: green;
 	}
 	.right-name {
 		position: absolute;
-		top: 90.5%;
-		left: calc(100% - 125px);
+		top: 90.5vh;
+		left: 91vw;
 		background-color: green;
 	}
 	.bottom-name {
 		position: absolute;
-		left: 1.5%;
-		top: 92%;
+		left: 1.5vw;
+		bottom: 0;
 		background-color: blue;
+	}
+	button {
+		padding: 1.5em;
+		border-radius: 5px;
+		font-weight: bold;
+		min-width: 3em;
+		margin-bottom: 5px;
+		cursor: pointer;
 	}
 	.name {
 		word-wrap: break-word;
 		word-break: break-all;
 		z-index: 10;
-		height: 8%;
-		width: 8%;
+		height: 8vh;
+		width: 8vw;
 		margin: 0;
+		overflow: hidden;
 	}
 	.trick-score {
 		position: absolute;
-		right: -5%;
+		right: 0;
 		bottom: 0;
 		z-index: 20;
 		margin: 0;
+		font-size: clamp(8px, 1vw, 16px);
 		background-color: white;
 		color: black;
+	}
+
+	@media (max-width: 600px) {
+		.choose-rung {
+			flex-direction: column;
+		}
 	}
 </style>

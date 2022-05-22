@@ -1,8 +1,7 @@
 <script lang="ts">
-	import type { CardType, Suit, ValueWithoutJoker } from 'svelte-playing-cards/Card.svelte';
-	import Card from 'svelte-playing-cards/Card.svelte';
+	import { generateFullDeckFun } from 'svelte-playing-cards/Deck.svelte';
+	import Card, { type CardType } from 'svelte-playing-cards/Card.svelte';
 	import CustomCard from './CustomCard.svelte';
-	import { myFetch } from './helper';
 	import Modal from './Modal.svelte';
 	import { authUserId, authUsername } from './stores/userCred';
 	import Resizer from 'react-image-file-resizer';
@@ -20,33 +19,15 @@
 	let loading = false;
 
 	const getCards = () => {
-		const suits: Suit[] = ['SPADES', 'DIAMONDS', 'HEARTS', 'CLUBS'];
-		const values: ValueWithoutJoker[] = [
-			'2',
-			'3',
-			'4',
-			'5',
-			'6',
-			'7',
-			'8',
-			'9',
-			'10',
-			'JACK',
-			'QUEEN',
-			'KING',
-			'ACE'
-		];
-		const cards: CardType[] = [];
-		for (const suit of suits) {
-			for (const value of values) {
-				cards.push(`${value}-of-${suit}`);
-			}
-		}
-		cards.push('RED-JOKER', 'BLACK-JOKER');
+		const cards = generateFullDeckFun({
+			withBlackJoker: true,
+			withRedJoker: true,
+			shouldShuffle: false
+		});
 		cards.push('10-of-CLUBS'); //extra for backside
 		return cards;
 	};
-	let cards: CardType[] = getCards();
+	const cards = getCards();
 
 	const updateProfile = async () => {
 		try {

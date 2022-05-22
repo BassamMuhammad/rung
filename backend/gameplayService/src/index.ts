@@ -4,7 +4,7 @@ import http from "http";
 import { Server } from "socket.io";
 import { initializeApp } from "firebase/app";
 import cors from "cors";
-import { doc, getFirestore, setDoc } from "firebase/firestore";
+import { doc, getDoc, getFirestore, setDoc } from "firebase/firestore";
 import { onCheck } from "./socketEvents/onCheck";
 import { onRung } from "./socketEvents/onRung";
 import { onMoveHistory } from "./socketEvents/onMoveHistory";
@@ -59,6 +59,22 @@ app.post("/users", async (req, res) => {
   } catch (error) {
     res.status(404).send("Error");
     console.log(error);
+  }
+});
+
+app.get("/check-room", async (req, res) => {
+  try {
+    const { roomId } = req.query;
+    if (!roomId)
+      res.status(404).json({ error: { message: "RoomId not provided" } });
+    else {
+      const room = await getDoc(doc(getFirestore(), "rooms", roomId as string));
+      if (room.get("completed")) {
+        res.status(404).json({ error: { message: "Game completed" } });
+      } else res.status(200).json({ data: { message: "Game not completed" } });
+    }
+  } catch (error) {
+    res.status(404).json({ error: { message: "Error occured. Try again" } });
   }
 });
 

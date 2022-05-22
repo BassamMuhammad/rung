@@ -36,7 +36,13 @@
 				$gameState = '';
 				goto('/', { replaceState: true });
 			} else {
-				$gameState = JSON.stringify({ roomId, isFriendly, username, place: 'room' });
+				$gameState = JSON.stringify({
+					roomId,
+					isFriendly,
+					username,
+					place: 'room',
+					madeAt: new Date().getTime()
+				});
 				users = [...users, ...usersInRoom];
 				username = usersInRoom[usersInRoom.length - 1];
 			}
