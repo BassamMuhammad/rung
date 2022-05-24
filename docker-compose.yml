@@ -12,25 +12,50 @@ services:
       - ./frontend:/frontend
       - nodemodules:/frontend/node_modules
 
-  gateway:
+  nginx:
     ports:
-      - 4000:4000
-    build: ./backend/apiGateway
+      - 8080:8080
+    image: nginx
+    volumes:
+      - ./templates:/etc/nginx/templates
+  room:
+    ports:
+      - 4001:4001
+    build: ./backend/roomService
     environment:
       - CHOKIDAR_USEPOLLING=true
     volumes:
-      - ./backend/apiGateway/src:/backend/apiGateway/src
+      - ./backend/roomService/src:/backend/roomService/src
       - nodemodules:/backend/apiGateway/node_modules
 
+  gameplay:
+      ports:
+        - 4002:4002
+      build: ./backend/gameplayService
+      environment:
+        - CHOKIDAR_USEPOLLING=true
+      volumes:
+        - ./backend/gameplayService/src:/backend/gameplayService/src
+        - nodemodules:/backend/gameplayService/node_modules
   auth:
     ports:
-      - 4002:4002
+      - 4003:4003
     build: ./backend/authService
     environment:
       - CHOKIDAR_USEPOLLING=true
     volumes:
       - ./backend/authService/src:/backend/authService/src
       - nodemodules:/backend/authService/node_modules
+  
+  profile:
+    ports:
+      - 4004:4004
+    build: ./backend/profileService
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./backend/profileService/src:/backend/profileService/src
+      - nodemodules:/backend/profileService/node_modules
 
 volumes:
   nodemodules:

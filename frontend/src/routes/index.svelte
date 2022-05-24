@@ -76,7 +76,6 @@
 				const jsonRes = await res.json();
 				if (jsonRes['data']) handleOnlineRoom();
 				else {
-					console.log(jsonRes);
 					$authUserId = '';
 					$authUsername = '';
 					showLoginForm = true;
@@ -124,7 +123,6 @@
 			}
 		} catch (error) {
 			alert('Error fetching data');
-			console.log(error);
 		}
 	};
 	$: if (browser && $authUserId && $authUsername) {

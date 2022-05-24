@@ -100,11 +100,8 @@
 			chooseRung(rung, false);
 			alert(`Rung is ${rung}`);
 		});
-		gameplaySocket.on('move-history', async (_history: Record<string, string>[]) => {
-			history = _history;
-			if (!startGame || dealStatus !== 'done') return;
-			await playFromHistory(true);
-			synchronize = false;
+		gameplaySocket.on('move', async (index: number, username: string) => {
+			makeTurn(index, username, false);
 		});
 		gameplaySocket.on('reject-force', () => {
 			forceChange = true;
@@ -165,8 +162,8 @@
 			if (
 				_history &&
 				(history.length < _history.length ||
-					Object.entries(history[history.length]).length <
-						Object.entries(_history[_history.length]).length)
+					Object.entries(history[history.length - 1]).length <
+						Object.entries(_history[_history.length - 1]).length)
 			) {
 				history = _history;
 			} else movesUptoDate = true;
@@ -418,7 +415,6 @@
 		gameplaySocket.emit('history', history, roomId);
 		return changedTurn;
 	};
-
 	const makeBotTurn = async () => {
 		const turnMakerName = Object.entries(usersWithSides).find(([side, user]) => side === turn)[1];
 		for (let i = 0; i < allRenderedCards[turn].length; i++) {
@@ -429,6 +425,7 @@
 	};
 	$: if ((turn && sidesLeft.includes(turn)) || moveTimer - 60 === 0) {
 		moveTimer = 0;
+		turn = '';
 		makeBotTurn();
 	}
 	const makeTurn = async (
@@ -438,6 +435,7 @@
 		botMove = false,
 		changeHistory = true
 	) => {
+		moveTimer = 0;
 		const turnMakerSide = Object.entries(usersWithSides).find(
 			([side, user]) => user === turnMakerName
 		)[0] as Side;
@@ -455,7 +453,7 @@
 			if (!changedTurn) nextTurn(turnMakerSide, emitToOthers);
 		}
 		if (emitToOthers) {
-			gameplaySocket.emit('move-history', roomId, history);
+			gameplaySocket.emit('move', roomId, index, turnMakerName);
 		}
 		const { x, y } = centerDiv.getBoundingClientRect();
 		const cardProps = await renderedCardToPlay.transitionToTarget(x, y, {

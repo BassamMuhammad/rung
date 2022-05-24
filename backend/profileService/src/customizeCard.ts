@@ -8,22 +8,29 @@ export const customizeCards = async (req: Request, res: Response) => {
     const customCards = req.files! as Express.Multer.File[];
     const frontCustomCardsWithValues: [string, Buffer][] = [];
     let backCustomCard;
-    customCards.forEach((customCard, i) => {
-      if (customCardsValue[i] === "back") backCustomCard = customCard.buffer;
+    const dbFrontCustomCardsKey = "frontCustomCards";
+    if (customCards.length === 1) {
+      if (customCardsValue === "back") backCustomCard = customCards[0].buffer;
       else
         frontCustomCardsWithValues.push([
-          customCardsValue[i],
-          customCard.buffer,
+          `${dbFrontCustomCardsKey}.${customCardsValue}`,
+          customCards[0].buffer,
         ]);
-    });
-
+    } else {
+      customCards.forEach((customCard, i) => {
+        if (customCardsValue[i] === "back") backCustomCard = customCard.buffer;
+        else
+          frontCustomCardsWithValues.push([
+            `${dbFrontCustomCardsKey}.${customCardsValue[i]}`,
+            customCard.buffer,
+          ]);
+      });
+    }
     for (let i = 0; i < frontCustomCardsWithValues.length; i++) {
       const [card, file] = frontCustomCardsWithValues[i];
       const url = await saveFile(`cards/${userId}/${card}`, file);
       await updateDoc(doc(getFirestore(), "users", userId), {
-        frontCustomCards: {
-          [card]: url,
-        },
+        [card]: url,
       });
     }
     if (backCustomCard) {
@@ -32,5 +39,8 @@ export const customizeCards = async (req: Request, res: Response) => {
         backCustomCard: url,
       });
     }
-  } catch (error) {}
+    res.status(200).json({ data: "success" });
+  } catch (error) {
+    res.status(400).json({ error: { message: "Error occured. Try again" } });
+  }
 };

@@ -49,6 +49,7 @@
 			}
 			console.log('customizw');
 			const frontCustomCardsFileEntries = Object.entries(frontCustomCardsFile);
+			console.log(frontCustomCardsFileEntries.length, backCustomCardFile);
 			if (frontCustomCardsFileEntries.length > 0 || backCustomCardFile) {
 				const formData = new FormData();
 				formData.append('userId', $authUserId);
@@ -60,6 +61,7 @@
 					formData.append('customCards', file);
 					formData.append('customCardsValue', cards);
 				});
+				console.log(formData);
 				const cardsRes = await fetch('http://localhost:4004/customize-cards', {
 					method: 'POST',
 					body: formData
@@ -69,8 +71,8 @@
 				} else {
 					alert('Error occured. Please try again');
 				}
-				loading = false;
 			}
+			loading = false;
 		} catch (error) {
 			alert('Error occured. Please try again');
 			loading = false;

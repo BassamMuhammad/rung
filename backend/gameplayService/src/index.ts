@@ -36,7 +36,7 @@ const PORT = (process.env.PORT && parseInt(process.env.PORT!)) || 4002;
 io.on("connection", (socket) => {
   socket.on("check", onCheck(io, socket));
   socket.on("rung", onRung(io, socket));
-  socket.on("move-history", onMoveHistory(io, socket));
+  socket.on("move", onMoveHistory(io, socket));
   socket.on("history", onEnd(io));
   socket.on("deck", onDeck(io, socket));
   socket.on("turn", onTurn(socket));

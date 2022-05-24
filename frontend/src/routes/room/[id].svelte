@@ -78,13 +78,18 @@
 		$gameState = '';
 		goto(`/play/${roomId}?username=${username}`, { replaceState: true });
 	}
+
+	let leaveRoom = () => {
+		$gameState = '';
+		goto('/', { replaceState: true });
+	};
 </script>
 
 <div class="container">
 	<side class="users-container">
 		<div class="users-heading">
 			<h3>In Room - {users.length}/4</h3>
-			{#if !isFriendly}
+			{#if isFriendly}
 				{#if copied}
 					<i>&#10004;</i>
 				{:else}
@@ -95,6 +100,7 @@
 		{#each users as user}
 			<h2 class="user">{user}</h2>
 		{/each}
+		<button on:click={leaveRoom} style="position:absolute;bottom:0;width:19%">Leave Room</button>
 	</side>
 	<div class="chat-container">
 		<div class="messages-container">
@@ -163,6 +169,7 @@
 		padding: 10px;
 		border-radius: 10px;
 		width: 30%;
+		margin: 5px;
 	}
 	.username {
 		padding: 0;
