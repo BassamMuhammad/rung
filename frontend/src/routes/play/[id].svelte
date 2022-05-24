@@ -197,16 +197,6 @@
 		}
 	};
 
-	$: if (connected) {
-		gameplaySocket.emit('check', username, roomId);
-	}
-
-	$: if (startGame && !moveTimerStopper && dealStatus === 'done' && !synchronize && movesUptoDate) {
-		if (moveTimer) clearInterval(moveTimer);
-		moveTimerStopper = setInterval(() => (moveTimer += 1), 1000);
-	}
-	forceTimerStopper = setInterval(() => (forceTimer += 1), 1000);
-
 	const makeMovesUptoDate = async () => {
 		synchronize = true;
 		fastTransition = true;
@@ -217,10 +207,6 @@
 			synchronize = false;
 		}, 1000 * 30);
 	};
-
-	$: if (startGame && dealStatus === 'done' && !movesUptoDate) {
-		makeMovesUptoDate();
-	}
 
 	const forceStart = () => {
 		let event: string;
@@ -244,10 +230,7 @@
 			rung
 		);
 	};
-	$: if (forceTimer - 60 === 0) {
-		forceTimer = 0;
-		forceStart();
-	}
+
 	const deal = async (
 		index: number,
 		numCards: 5 | 4,
@@ -279,27 +262,6 @@
 			await deal(i, numCards, dealStatus, i === sides[rungChoosingUserSide] - 1);
 		}
 	};
-	$: if (
-		deckComp &&
-		allowed &&
-		rungChoosingUserSide &&
-		dealStatus === 'aboutTo' &&
-		(isRungChooser || deck.length > 0)
-	) {
-		dealStatus = 'start';
-		deal(sides[rungChoosingUserSide], 5, 'rung', true);
-	}
-
-	$: if (rung && dealStatus === 'rung') {
-		dealToAll(5, 'first', false);
-	}
-	$: if (rung && dealStatus === 'first') dealToAll(4, 'second');
-	$: if (rung && dealStatus === 'second') {
-		dealToAll(4, 'done');
-	}
-	$: if (dealStatus === 'done') {
-		gameplaySocket.emit('deal', username, roomId);
-	}
 
 	const chooseRung = (chosenRung: Suit, emitToOthers = true) => {
 		rung = chosenRung;
@@ -334,7 +296,7 @@
 			console.log(error);
 		}
 	};
-	getUserData();
+
 	const cardStrToNumVal = (cardStrVal: ValueWithoutJoker) => {
 		switch (cardStrVal) {
 			case 'ACE':
@@ -423,11 +385,7 @@
 			if (success) break;
 		}
 	};
-	$: if ((turn && sidesLeft.includes(turn)) || moveTimer - 60 === 0) {
-		moveTimer = 0;
-		turn = '';
-		makeBotTurn();
-	}
+
 	const makeTurn = async (
 		index: number,
 		turnMakerName: string,
@@ -507,6 +465,69 @@
 		if (emitToOthers) gameplaySocket.emit('turn', usersWithSides[turn], roomId);
 	};
 
+	const confirmQuit = (e: BeforeUnloadEvent) => {
+		e.preventDefault();
+		if (e.type === 'beforeunload') {
+			e.returnValue = '';
+		}
+	};
+
+	const returnToHomePage = () => {
+		$gameState = '';
+		goto('/', { replaceState: true });
+	};
+
+	onMount(() => window.addEventListener('beforeunload', confirmQuit));
+
+	getUserData();
+
+	$: if (connected) {
+		gameplaySocket.emit('check', username, roomId);
+	}
+
+	$: if (startGame && !moveTimerStopper && dealStatus === 'done' && !synchronize && movesUptoDate) {
+		if (moveTimer) clearInterval(moveTimer);
+		moveTimerStopper = setInterval(() => (moveTimer += 1), 1000);
+	}
+	forceTimerStopper = setInterval(() => (forceTimer += 1), 1000);
+
+	$: if (startGame && dealStatus === 'done' && !movesUptoDate) {
+		makeMovesUptoDate();
+	}
+
+	$: if (forceTimer - 60 === 0) {
+		forceTimer = 0;
+		forceStart();
+	}
+
+	$: if (
+		deckComp &&
+		allowed &&
+		rungChoosingUserSide &&
+		dealStatus === 'aboutTo' &&
+		(isRungChooser || deck.length > 0)
+	) {
+		dealStatus = 'start';
+		deal(sides[rungChoosingUserSide], 5, 'rung', true);
+	}
+
+	$: if (rung && dealStatus === 'rung') {
+		dealToAll(5, 'first', false);
+	}
+	$: if (rung && dealStatus === 'first') dealToAll(4, 'second');
+	$: if (rung && dealStatus === 'second') {
+		dealToAll(4, 'done');
+	}
+	$: if (dealStatus === 'done') {
+		gameplaySocket.emit('deal', username, roomId);
+	}
+
+	$: if ((turn && sidesLeft.includes(turn)) || moveTimer - 60 === 0) {
+		moveTimer = 0;
+		turn = '';
+		makeBotTurn();
+	}
+
 	$: if (gameComplete) {
 		didWeWon = myTeamTricks > opponentTeamTricks;
 		$gameState = '';
@@ -518,22 +539,10 @@
 		}
 		gameplaySocket.emit('onEnd', rung, winners, history, roomId);
 	}
-	const confirmQuit = (e: BeforeUnloadEvent) => {
-		e.preventDefault();
-		if (e.type === 'beforeunload') {
-			e.returnValue = '';
-		}
-	};
-	onMount(() => window.addEventListener('beforeunload', confirmQuit));
 
 	onDestroy(() => {
 		if (browser) window.removeEventListener('beforeunload', confirmQuit);
 	});
-
-	const returnToHomePage = () => {
-		$gameState = '';
-		goto('/', { replaceState: true });
-	};
 </script>
 
 <div class="container">

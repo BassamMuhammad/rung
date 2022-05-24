@@ -28,6 +28,7 @@
 	let users: string[] = [];
 	let messageToSend = '';
 	let messages: { username: string; text: string }[] = [];
+	let copied = false;
 
 	if (browser) {
 		$roomSocket.emit('check-room', roomId, username, isFriendly);
@@ -73,16 +74,15 @@
 			copied = false;
 		}, 1000);
 	};
-	let copied = false;
+	const leaveRoom = () => {
+		$gameState = '';
+		goto('/', { replaceState: true });
+	};
+
 	$: if (users.length === 4) {
 		$gameState = '';
 		goto(`/play/${roomId}?username=${username}`, { replaceState: true });
 	}
-
-	let leaveRoom = () => {
-		$gameState = '';
-		goto('/', { replaceState: true });
-	};
 </script>
 
 <div class="container">
