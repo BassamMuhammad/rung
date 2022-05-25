@@ -334,7 +334,7 @@
 				seniorCard = lastTrickEntries[i][1];
 			}
 		}
-		if (consecutiveTricksUser === seniorUser) {
+		if (consecutiveTricksUser === seniorUser || totalTricksPlayed === 13) {
 			consecutiveTricksWon++;
 			if (
 				(consecutiveTricksWon === 2 && totalTricksPlayed > 3) ||
@@ -346,6 +346,7 @@
 					myTeamTricks += tricksWon;
 				else opponentTeamTricks += tricksWon;
 				consecutiveTricksWon = 0;
+				consecutiveTricksUser = '';
 			}
 		} else {
 			consecutiveTricksUser = seniorUser;
@@ -426,21 +427,21 @@
 		const cardProps = await renderedCardToPlay.transitionToTarget(x, y, {
 			duration: fastTransition ? 5 : 1000
 		});
-		let topPosition = '0px';
-		let leftPosition = '0px';
+		let topPosition = '0';
+		let leftPosition = '0';
 
 		switch (turnMakerSide) {
 			case 'top':
-				topPosition = '-110px';
-				leftPosition = '0px';
+				topPosition = '-18vmin';
+				leftPosition = '0';
 				break;
 			case 'left':
-				leftPosition = '-80px';
-				topPosition = '-55px';
+				leftPosition = '-18vmin';
+				topPosition = '-9vmin';
 				break;
 			case 'right':
-				leftPosition = '80px';
-				topPosition = '-55px';
+				leftPosition = '18vmin';
+				topPosition = '-9vmin';
 				break;
 			default:
 				break;
@@ -531,7 +532,7 @@
 		gameplaySocket.emit('deal', username, roomId);
 	}
 
-	$: if ((moveTimer !== 0 && turn && sidesLeft.includes(turn)) || moveTimer - 10 === 0) {
+	$: if ((moveTimer !== 0 && turn && sidesLeft.includes(turn)) || moveTimer - 60 === 0) {
 		moveTimer = 0;
 		makeBotTurn();
 	}
@@ -572,7 +573,6 @@
 				{#each sidesCardsProps[num] as cardProps, index (`${side}-${index}`)}
 					<svelte:component
 						this={Card}
-						style="z-index: 50;"
 						bind:this={allRenderedCards[side][index]}
 						{...cardProps}
 						onDblClick={async () => {
