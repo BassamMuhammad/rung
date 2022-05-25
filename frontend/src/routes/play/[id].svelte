@@ -28,6 +28,7 @@
 	import { gameState } from '$lib/stores/gameState';
 	import { authUserId } from '$lib/stores/userCred';
 	import CustomCard from '$lib/CustomCard.svelte';
+	import Index from '../index.svelte';
 
 	export let roomId: string;
 	export let username: string;
@@ -293,7 +294,6 @@
 			}
 		} catch (error) {
 			alert('Error fetching data');
-			console.log(error);
 		}
 	};
 
@@ -380,12 +380,21 @@
 	const makeBotTurn = async () => {
 		const turnMakerName = Object.entries(usersWithSides).find(([side, user]) => side === turn)[1];
 		for (let i = 0; i < allRenderedCards[turn].length; i++) {
-			if (playedCards.includes(allRenderedCards[turn][i].getCard())) continue;
-			const success = await makeTurn(i, turnMakerName, false, true);
-			if (success) break;
+			const card = allRenderedCards[turn][i].getCard();
+			if (playedCards.includes(card)) continue;
+			const valid = isMoveValid(card, allRenderedCards[turn]);
+			if (valid) {
+				gameplaySocket.emit(
+					'force-move',
+					roomId,
+					`${totalTricksPlayed}-${Object.entries(history[history.length - 1]).length % 4}`,
+					i,
+					turnMakerName
+				);
+				break;
+			}
 		}
 	};
-
 	const makeTurn = async (
 		index: number,
 		turnMakerName: string,
@@ -522,9 +531,8 @@
 		gameplaySocket.emit('deal', username, roomId);
 	}
 
-	$: if ((turn && sidesLeft.includes(turn)) || moveTimer - 60 === 0) {
+	$: if ((moveTimer !== 0 && turn && sidesLeft.includes(turn)) || moveTimer - 10 === 0) {
 		moveTimer = 0;
-		turn = '';
 		makeBotTurn();
 	}
 

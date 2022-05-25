@@ -26,7 +26,6 @@ export const onCheck =
         const positionsIndex = sockets.findIndex(
           (socket) => socket.data["positions"]
         );
-        console.log({ positionsIndex, deckIndex, rungIndex, startIndex });
         socket.emit("allowed", username);
         socket.data["username"] = username;
         socket.data["roomId"] = roomId;
@@ -49,7 +48,6 @@ export const onCheck =
           if (startIndex >= 0) {
             const startSocket = sockets[startIndex];
             socket.emit("start-game", true, startSocket.data["history"]);
-            console.log("start");
           }
           socket.to(roomId).emit("reconnect", username);
         } else {

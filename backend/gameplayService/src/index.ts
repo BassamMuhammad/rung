@@ -7,7 +7,8 @@ import cors from "cors";
 import { doc, getDoc, getFirestore, setDoc } from "firebase/firestore";
 import { onCheck } from "./socketEvents/onCheck";
 import { onRung } from "./socketEvents/onRung";
-import { onMoveHistory } from "./socketEvents/onMoveHistory";
+import { onMove } from "./socketEvents/onMove";
+import { onForceMove } from "./socketEvents/onForceMove";
 import { onEnd } from "./socketEvents/onEnd";
 import { onDeck } from "./socketEvents/onDeck";
 import { onTurn } from "./socketEvents/onTurn";
@@ -36,7 +37,8 @@ const PORT = (process.env.PORT && parseInt(process.env.PORT!)) || 4002;
 io.on("connection", (socket) => {
   socket.on("check", onCheck(io, socket));
   socket.on("rung", onRung(io, socket));
-  socket.on("move", onMoveHistory(io, socket));
+  socket.on("move", onMove(io, socket));
+  socket.on("force-move", onForceMove(io, socket));
   socket.on("history", onEnd(io));
   socket.on("deck", onDeck(io, socket));
   socket.on("turn", onTurn(socket));
@@ -49,7 +51,6 @@ io.on("connection", (socket) => {
 app.post("/users", async (req, res) => {
   try {
     const { usernames, roomId } = req.body;
-    console.log({ usernames, roomId });
     await setDoc(doc(getFirestore(), "rooms", roomId), {
       usernames,
       roomId,
@@ -59,7 +60,6 @@ app.post("/users", async (req, res) => {
     res.send("ok");
   } catch (error) {
     res.status(404).send("Error");
-    console.log(error);
   }
 });
 

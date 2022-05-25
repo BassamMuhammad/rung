@@ -13,7 +13,6 @@ export const onDeal =
     sockets.forEach((sock) => {
       if (sock.data["deal"]) numOfDeal++;
     });
-    console.log(numOfDeal);
     if (numOfDeal >= 4) {
       const sockets = await io.in(roomId).fetchSockets();
       sockets.forEach((sock) => (sock.data["start"] = true));
