@@ -416,12 +416,18 @@
 				return false;
 			}
 		}
+		if (emitToOthers) {
+			gameplaySocket.emit(
+				'move',
+				roomId,
+				`${totalTricksPlayed}-${Object.entries(history[history.length - 1]).length % 4}`,
+				index,
+				turnMakerName
+			);
+		}
 		if (changeHistory) {
 			const changedTurn = addToHistory(turnMakerName, cardToPlay);
 			if (!changedTurn) nextTurn(turnMakerSide, emitToOthers);
-		}
-		if (emitToOthers) {
-			gameplaySocket.emit('move', roomId, index, turnMakerName);
 		}
 		const { x, y } = centerDiv.getBoundingClientRect();
 		const cardProps = await renderedCardToPlay.transitionToTarget(x, y, {
